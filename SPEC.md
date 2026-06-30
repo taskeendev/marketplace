@@ -1,7 +1,7 @@
 # SPEC — Omnichannel Marketplace (greenfield, multi-repo)
 
 > **สำหรับ agent ที่ลงมือทำ:** ใช้ superpowers:writing-plans (task ทีละ 2–5 นาที, TDD, commit ถี่). task ใช้ checkbox.
-> เขียนใหม่ทั้งหมด ไม่แตะ lab เดิม. P0–P2 = สเปคเต็ม (task + API input/output). P3–P5 = โครง (ลง API ตอนเริ่มแต่ละเฟส).
+> เขียนใหม่ทั้งหมด ไม่แตะ lab เดิม. P0–P2 + P3a = สเปคเต็ม (task + API input/output). P3b/P3c/P4/P5 = โครง (ลง API ตอนเริ่มแต่ละเฟส).
 
 ## ข้อสรุปที่ยืนยันแล้ว (ผู้ใช้เคาะเอง)
 
@@ -192,9 +192,48 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 
 # โครง P3–P5 (ลงรายละเอียด API ตอนเริ่มแต่ละเฟส)
 
-**Phase 3 — omnichannel social (FB/IG)** · เป้าหมาย: ผู้ขายโพสต์สินค้าไป FB/IG + ขายผ่าน social ตัด **สต็อกก้อนเดียวกัน**
-- T: `marketplace-social` · ตั้ง Meta app/Graph API · ผูก FB Page → publish สินค้า (เลือกโพสต์เลย/ตั้งเวลา) + caption ·
-  IG · รับ order/DM จาก social → เรียก catalog decrement (channel=fb/ig) · ⚠️ **บล็อกเรื่อง Meta Business verification + review**
+**Phase 3 — omnichannel social (FB/IG)** = 3 ระบบอิสระ → แตกเป็น sub-phase (แต่ละอันมี spec+plan+build แยก). ทั้งหมด **mock external Meta ก่อน**, เสียบ Graph จริงตอน Meta Business verification ผ่าน (⚠️ blocker เดิม):
+- **P3a — Omnichannel inbox**: FB Messenger DM → รวมในกล่องแชต P2 *(สเปคเต็มด้านล่าง)*
+- **P3b — Product sync**: catalog → FB/IG Shops *(skeleton — ลงรายละเอียดตอนเริ่ม)*
+- **P3c — Social login**: FB/IG OAuth ใน auth *(skeleton)*
+
+### SPEC — P3a: Omnichannel inbox (FB Messenger, 2-way, mock Meta)
+**เคาะแล้ว (brainstorm 2026-06-30):** external contact (conversation +channel +external_id +display_name, **ไม่สร้าง user**) · รวมในกล่องแชต P2 เดิม · **FB Messenger ช่องเดียว 2-way** · social↔chat = **internal REST** (ตัด queue/Kafka)
+
+**สถาปัตยกรรม:** service ใหม่ `marketplace-social` (:8085) = FB gateway (webhook verify + receive + Meta Send *mock* + page connection *mock*); chat (P2) extend รองรับ channel/external. ทั้งคู่หลัง Kong + ใช้ `common`.
+
+**Data flow**
+- **ขาเข้า:** FB webhook → social normalize → `POST {chat}/internal/inbound {channel:fb, pageId, externalId, displayName, body}` → chat map pageId→shop, find-or-create external conversation, persist, **broadcast เข้า WS ของ seller** → seller เห็นใน `/chat` (badge FB)
+- **ขาออก:** seller ตอบในห้อง fb → `POST {social}/internal/send {pageId, externalId, body}` → social → Meta Send API (**mock:** บันทึก `outbound_log`)
+
+**Mock Meta:** Send = mock client หลัง interface (บันทึก+log; เสียบ Graph จริงทีหลัง) · inbound = `POST /internal/social/simulate-inbound` จำลอง webhook (smoke/demo) · connection = "เชื่อม FB Page (mock)" ผูก `pageId↔shop` + fake token
+
+**Data model**
+- `chat.conversation`: +`channel` default `'web'`, +`external_id` null, +`display_name` null · unique ใหม่ `(shop_id, channel, external_id)` (web คงเดิม `(buyer_username, shop_id)`)
+- `chat.message`: inbound external → `sender_username` null = customer · unread ของ seller = นับฝั่ง customer หลัง `last_read`
+- `social`: `page_connection(shop_id, page_id, page_token, channel)` · `outbound_log(page_id, external_id, body, created_at)`
+
+**Internal/REST API**
+| Method Path | service | auth | ทำอะไร |
+|---|---|---|---|
+| `GET /webhooks/fb` | social | public | Meta webhook verify (echo `hub.challenge`) |
+| `POST /webhooks/fb` | social | (Meta sig) | รับ event → normalize → เรียก chat `/internal/inbound` |
+| `POST /internal/social/simulate-inbound` | social | internal | จำลอง FB inbound (dev/smoke) |
+| `POST /internal/social/send` | social | `X-Internal-Key` | mock Meta Send + บันทึก `outbound_log` |
+| `POST /internal/chat/inbound` | chat | `X-Internal-Key` | find-or-create external conversation + persist + broadcast WS |
+| `POST /api/social/connections` | social | SELLER | เชื่อม FB Page (mock) ผูก `pageId↔shop` |
+
+**Web:** `/chat` แสดง badge ช่อง (web/FB) + ชื่อ external contact (seller ตอบเหมือนเดิม) · seller dashboard: "เชื่อม Facebook Page (mock)" + ปุ่ม dev "จำลองข้อความ FB เข้า"
+
+**gateway/deploy:** Kong route `/api/social` + `/webhooks/fb`→social · compose +social +postgres-social · **smoke step 11:** simulate inbound → โผล่ใน chat ของ seller → seller ตอบ → `outbound_log` มี record (ทะลุ Kong)
+
+**แตกงาน (P3a-T1..T6 — ทำทีละ task + test ก่อน done)**
+- **T1 [BE]** scaffold `marketplace-social` (:8085, Postgres+Flyway+common) + `page_connection` + webhook verify (GET challenge) → boot + test
+- **T2 [BE]** chat extend conversation/message (channel/external) + `POST /internal/chat/inbound` (find-or-create external + broadcast WS) → test
+- **T3 [BE]** social: receive `POST /webhooks/fb` → normalize → เรียก chat `/inbound` + `POST /internal/social/simulate-inbound` → test
+- **T4 [BE]** outbound: seller ตอบในห้อง fb → chat เรียก social `/internal/send` → mock send + `outbound_log` → test
+- **T5 [GW]** Kong route `/api/social` + `/webhooks/fb` · compose +social +postgres-social · run.sh build social · **smoke step 11**
+- **T6 [FE]** web: channel badge + external name ใน `/chat` + "connect FB (mock)" + ปุ่ม dev simulate
 
 **Phase 4 — Hermes AI agent + admin** · เป้าหมาย: ตอบลูกค้าอัตโนมัติ (เรียกข้อมูลจริง) + เครื่องมือ admin
 - T: `marketplace-agent` รัน **Hermes** (self-host) · ห่อ catalog/order เป็น **tool/MCP** (สต็อก/ราคา/สถานะออเดอร์) ·
