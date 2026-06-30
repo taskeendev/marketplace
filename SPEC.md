@@ -1,7 +1,7 @@
 # SPEC — Omnichannel Marketplace (greenfield, multi-repo)
 
 > **สำหรับ agent ที่ลงมือทำ:** ใช้ superpowers:writing-plans (task ทีละ 2–5 นาที, TDD, commit ถี่). task ใช้ checkbox.
-> เขียนใหม่ทั้งหมด ไม่แตะ lab เดิม. P0+P1 = สเปคเต็ม (task + API input/output). P2–P5 = โครง (ลง API ตอนเริ่มแต่ละเฟส).
+> เขียนใหม่ทั้งหมด ไม่แตะ lab เดิม. P0–P2 = สเปคเต็ม (task + API input/output). P3–P5 = โครง (ลง API ตอนเริ่มแต่ละเฟส).
 
 ## ข้อสรุปที่ยืนยันแล้ว (ผู้ใช้เคาะเอง)
 
@@ -141,11 +141,52 @@ qty)`
 
 ---
 
-# โครง P2–P5 (ลงรายละเอียด API ตอนเริ่มแต่ละเฟส)
+# SPEC — Phase 2: แชต real-time (พระเอก)
 
-**Phase 2 — แชต real-time (พระเอก)** · เป้าหมาย: buyer↔seller คุยกันสดจากหน้าสินค้า, เก็บประวัติ, แจ้งข้อความใหม่
-- T: `marketplace-chat` scaffold (DB conversation/message) · WebSocket `/ws/chat` (auth ข้อความแรก, route หากัน, persist) ·
-  REST ดึงประวัติ/conversation list · unread count · web: หน้าแชต + ปุ่ม "แชตผู้ขาย" (ก็อป pattern WS) · Kong route `/api/chat`+`/ws/chat`
+**เป้าหมายเฟส:** buyer↔seller คุยกันสดจากหน้าสินค้า (WebSocket), เก็บประวัติ, รายการห้องแชต, unread —
+เป็นรากฐานที่ P4 (Hermes agent) จะมาตอบอัตโนมัติทีหลัง (6 task)
+
+**Service ใหม่:** `marketplace-chat` (:8084) · แก้ gateway (route `/api/chat` + `/ws/chat`), deploy, web
+
+**ตัดสินใจ (ผู้ใช้เคาะ):** ห้อง = **ต่อร้าน** (1 ห้อง/คู่ buyer–shop) + แนบสินค้าที่เริ่ม · ขอบเขต = **Lean core**
+(text เรียลไทม์/ประวัติ/รายการ/unread/การ์ดสินค้า; ตัด typing/presence/read-receipt/รูป/multi-instance/group) ·
+transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ P4 agent seam = ไว้ทำตอน P4
+
+- [ ] **P2-T1: chat scaffold + data model** — Boot+Postgres(chatdb)+Flyway+common+websocket · ตาราง `conversation`/`message` · health · verify: boot + Testcontainers
+- [ ] **P2-T2: REST conversations** — `POST /conversations` (find-or-create จาก productId→catalog), `GET /conversations` (buyer by username / seller by shopId) + unread · verify: ยิงซ้ำได้ห้องเดิม, list ถูกฝั่ง
+- [ ] **P2-T3: REST messages** — `GET /{id}/messages` (ประวัติ), `POST /{id}/read` (mark-read) + participant guard 403 · verify: คนนอกห้อง → 403
+- [ ] **P2-T4: WS handler** — `/ws/chat`: auth frame แรก (`common.JwtVerifier`) → registry ใน memory → send/persist/deliver · verify: **2 client ส่ง→อีกฝั่งได้รับจริง**, auth ผิด → ปิด 4401
+- [ ] **P2-T5: gateway + deploy** — Kong route `/api/chat` + `/ws/chat` (WS upgrade); compose เพิ่ม chat + postgres-chat; run.sh build chat · verify: ยิงผ่าน :8080 + WS ทะลุ
+- [ ] **P2-T6: web chat + i18n + smoke** — ปุ่ม "แชตผู้ขาย" หน้าสินค้า, หน้า `/chat` (list+thread+WS), badge unread, i18n TH/EN · verify: คุยสองทางผ่าน Kong, สลับภาษา
+
+### Data model — Phase 2 (db: chatdb)
+- `conversation(id, buyer_username, shop_id, shop_name, product_id NULL, buyer_last_read_at, seller_last_read_at, last_message_at, created_at)` · **UNIQUE(buyer_username, shop_id)** = 1 ห้อง/คู่
+- `message(id, conversation_id →conversation ON DELETE CASCADE, sender_username, body, created_at)` · INDEX(conversation_id, created_at)
+- unread (ฝั่งฉัน) = `COUNT(message WHERE created_at > my_last_read_at AND sender_username != ฉัน)` · ฝั่งผู้ขาย route ด้วย `shop_id` (resolve จาก catalog `/shops/me`)
+
+### API — Phase 2
+**chat REST `/api/chat`** (ผ่าน Kong, identity จาก `X-Auth-User`/`X-Auth-Role`)
+| Method/Path | สิทธิ์ | input | output | error |
+|---|---|---|---|---|
+| `POST /api/chat/conversations` | BUYER | `{productId}` | `200 {id, shopId, shopName, productId, lastMessageAt}` (find-or-create) | 400/404 |
+| `GET /api/chat/conversations` | BUYER/SELLER | — | `200 [{id, shopId, shopName, productId, lastMessage, unread, lastMessageAt}]` | 401 |
+| `GET /api/chat/conversations/{id}/messages` | participant | `?before=&limit=` | `200 [{id, conversationId, senderUsername, body, createdAt}]` | 403/404 |
+| `POST /api/chat/conversations/{id}/read` | participant | — | `204` | 403/404 |
+
+**chat WebSocket `/ws/chat`** (JSON text frames · auth ด้วย frame แรก เพราะ browser ตั้ง header บน WS handshake ไม่ได้)
+| ทิศ | frame | หมายเหตุ |
+|---|---|---|
+| client→ | `{type:"auth", token}` (frame แรกบังคับ) | ✓ → `{type:"authed"}` ; ✗ → close **4401** |
+| client→ | `{type:"send", conversationId, body}` | เช็คเป็นคู่สนทนา → persist → push ไป buyer+shop; ไม่ใช่คู่ → close **4403** |
+| →client | `{type:"message", message:{id, conversationId, senderUsername, body, createdAt}}` | ส่งถึงทั้งสองฝั่ง (echo ผู้ส่งด้วย) |
+| →client | `{type:"error", detail}` | error อื่นๆ |
+
+**เชื่อม catalog (chat→catalog, internal docker net):** สร้างห้อง → `GET /api/catalog/products/{id}` (shopId, shopName) · seller resolve ร้าน → `GET /api/catalog/shops/me` (forward identity)
+**gateway (เพิ่ม):** Kong route `/api/chat`→chat-service · `/ws/chat`→chat-service (WS upgrade; global jwt-hs512 plugin ปล่อยผ่านเมื่อไม่มี token header บน handshake)
+
+---
+
+# โครง P3–P5 (ลงรายละเอียด API ตอนเริ่มแต่ละเฟส)
 
 **Phase 3 — omnichannel social (FB/IG)** · เป้าหมาย: ผู้ขายโพสต์สินค้าไป FB/IG + ขายผ่าน social ตัด **สต็อกก้อนเดียวกัน**
 - T: `marketplace-social` · ตั้ง Meta app/Graph API · ผูก FB Page → publish สินค้า (เลือกโพสต์เลย/ตั้งเวลา) + caption ·
