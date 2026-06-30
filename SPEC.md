@@ -144,7 +144,7 @@ qty)`
 # SPEC — Phase 2: แชต real-time (พระเอก)
 
 **เป้าหมายเฟส:** buyer↔seller คุยกันสดจากหน้าสินค้า (WebSocket), เก็บประวัติ, รายการห้องแชต, unread —
-เป็นรากฐานที่ P4 (Hermes agent) จะมาตอบอัตโนมัติทีหลัง (6 task)
+เป็นรากฐานที่ P4 (Hermes agent) จะมาตอบอัตโนมัติทีหลัง (10 task — แตกละเอียดเพื่อจัดการง่าย, scope = Lean เท่าเดิม)
 
 **Service ใหม่:** `marketplace-chat` (:8084) · แก้ gateway (route `/api/chat` + `/ws/chat`), deploy, web
 
@@ -153,11 +153,15 @@ qty)`
 transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ P4 agent seam = ไว้ทำตอน P4
 
 - [ ] **P2-T1: chat scaffold + data model** — Boot+Postgres(chatdb)+Flyway+common+websocket · ตาราง `conversation`/`message` · health · verify: boot + Testcontainers
-- [ ] **P2-T2: REST conversations** — `POST /conversations` (find-or-create จาก productId→catalog), `GET /conversations` (buyer by username / seller by shopId) + unread · verify: ยิงซ้ำได้ห้องเดิม, list ถูกฝั่ง
-- [ ] **P2-T3: REST messages** — `GET /{id}/messages` (ประวัติ), `POST /{id}/read` (mark-read) + participant guard 403 · verify: คนนอกห้อง → 403
-- [ ] **P2-T4: WS handler** — `/ws/chat`: auth frame แรก (`common.JwtVerifier`) → registry ใน memory → send/persist/deliver · verify: **2 client ส่ง→อีกฝั่งได้รับจริง**, auth ผิด → ปิด 4401
-- [ ] **P2-T5: gateway + deploy** — Kong route `/api/chat` + `/ws/chat` (WS upgrade); compose เพิ่ม chat + postgres-chat; run.sh build chat · verify: ยิงผ่าน :8080 + WS ทะลุ
-- [ ] **P2-T6: web chat + i18n + smoke** — ปุ่ม "แชตผู้ขาย" หน้าสินค้า, หน้า `/chat` (list+thread+WS), badge unread, i18n TH/EN · verify: คุยสองทางผ่าน Kong, สลับภาษา
+- [ ] **P2-T2: CatalogClient + สร้างห้อง** — `CatalogClient` (product→shop, shops/me→shopId) + `POST /conversations` find-or-create · verify: ยิงซ้ำ productId เดิม → ห้องเดิม
+- [ ] **P2-T3: รายการห้อง + unread** — `GET /conversations` (buyer by username / seller by shopId) + unread count · verify: เห็นถูกฝั่ง, unread ถูก
+- [ ] **P2-T4: ประวัติข้อความ + guard** — `GET /{id}/messages?before=&limit=` + participant guard · verify: คนนอกห้อง → 403
+- [ ] **P2-T5: mark-read** — `POST /{id}/read` (set last_read_at ตามฝั่ง) · verify: read แล้ว unread = 0
+- [ ] **P2-T6: WS endpoint + auth + registry** — `/ws/chat` `TextWebSocketHandler`, frame แรก auth (`common.JwtVerifier`), in-memory registry · verify: auth ✓ → `authed` / ผิด → ปิด 4401
+- [ ] **P2-T7: WS send + delivery** — `{type:"send"}` persist + push ไป buyer+shop (echo), guard ไม่ใช่คู่ → 4403 · verify: **2 client ส่ง→อีกฝั่งได้รับจริง**
+- [ ] **P2-T8: gateway + deploy** — Kong route `/api/chat`+`/ws/chat` (WS upgrade); compose เพิ่ม chat+postgres-chat; run.sh · verify: ยิงผ่าน :8080 + WS ทะลุ
+- [ ] **P2-T9: web — chat page** — ปุ่ม "แชตผู้ขาย" หน้าสินค้า + หน้า `/chat` (list+thread+WS send/recv+mark-read) · verify: คุยสองทางผ่าน Kong
+- [ ] **P2-T10: web — unread badge + i18n + smoke** — badge unread ใน header, i18n TH/EN, e2e smoke P2 · verify: badge อัปเดต, สลับภาษา, smoke เขียว
 
 ### Data model — Phase 2 (db: chatdb)
 - `conversation(id, buyer_username, shop_id, shop_name, product_id NULL, buyer_last_read_at, seller_last_read_at, last_message_at, created_at)` · **UNIQUE(buyer_username, shop_id)** = 1 ห้อง/คู่
