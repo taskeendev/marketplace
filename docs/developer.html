@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Developer API — Marketplace</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="nav">
+  <span class="brand">Marketplace<span>Docs</span></span>
+  <a class="link" href="index.html">หน้าแรก</a>
+  <a class="link" href="buyer.html">ผู้ซื้อ</a>
+  <a class="link" href="seller.html">ผู้ขาย</a>
+  <a class="link active" href="developer.html">Developer (API)</a>
+  <a class="link" href="operations.html">ผู้ดูแลระบบ</a>
+</nav>
+<div class="wrap">
+  <span class="pill">⚙️ Developer · REST + WebSocket</span>
+  <h1>Marketplace API Reference</h1>
+  <p class="lead">Omnichannel marketplace API — Java 21 / Spring Boot behind a Kong gateway. Audience: developers.</p>
+
+  <h2 id="overview">Overview</h2>
+  <p>Every request goes through the <b>Kong gateway</b>. Kong verifies the JWT and injects <code>X-Auth-User</code> /
+  <code>X-Auth-Role</code> headers that services trust — you never talk to services directly. Public endpoints work
+  without a token. Five services sit behind the gateway: <b>Auth</b>, <b>Catalog</b>, <b>Order</b>, <b>Chat</b>, <b>Social</b>.</p>
+  <div class="note"><b>Base URL:</b> <code>http://localhost:8080</code> (all paths below are relative to this)</div>
+
+  <h2 id="prerequisites">Prerequisites</h2>
+  <ul>
+    <li>The stack running locally (see <a href="operations.html">ผู้ดูแลระบบ</a> — <code>./run.sh --build -d</code>)</li>
+    <li>An HTTP client (<code>curl</code>, Postman, or similar)</li>
+    <li>A user account (create one in Quick Start below)</li>
+  </ul>
+
+  <h2 id="quickstart">Quick Start (5 นาที)</h2>
+  <pre><code># 1) Register a user (role BUYER)
+curl -X POST http://localhost:8080/api/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","username":"you","password":"password123"}'
+
+# 2) Login -> copy the accessToken
+curl -X POST http://localhost:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"you","password":"password123"}'
+
+# 3) Call an authenticated endpoint
+curl http://localhost:8080/api/users/me \
+  -H "Authorization: Bearer &lt;accessToken&gt;"
+
+# 4) Browse products (public, no token)
+curl http://localhost:8080/api/catalog/products</code></pre>
+
+  <h2 id="auth">Authentication</h2>
+  <ul>
+    <li><b>Access token</b> — a JWT (HS512, ~15 min TTL). Send it as <code>Authorization: Bearer &lt;token&gt;</code>.</li>
+    <li><b>Refresh token</b> — set as an <code>httpOnly</code> cookie on login. Call <code>POST /api/auth/refresh</code> to rotate it and get a new access token.</li>
+    <li><b>Roles</b> — <code>BUYER</code>, <code>SELLER</code> (<code>ADMIN</code> reserved). Upgrade with <code>POST /api/users/me/become-seller</code>, then refresh/login again to receive a token carrying the <code>SELLER</code> role.</li>
+    <li><b>Gateway trust</b> — Kong verifies the token and injects <code>X-Auth-User</code> / <code>X-Auth-Role</code>; if no token is present it passes through so public endpoints still work.</li>
+    <li><b>Internal endpoints</b> (<code>/internal/**</code>, <code>/webhooks/**</code>) are service-to-service (guarded by <code>X-Internal-Key</code> or a webhook token) — not for normal API clients.</li>
+  </ul>
+
+  <h2 id="endpoints">Endpoints</h2>
+  <p class="muted">Grouped by service. Auth badge = role required (Kong-injected). Examples use real field names from the code.</p>
+<h2 id="auth">Auth Service <span class="muted" style="font-weight:400;font-size:1rem">· :8081</span></h2>
+<p class="muted">JWT-based authentication and user management service for the marketplace</p>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/health</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Health check endpoint</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;status&quot;:&quot;UP&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/auth/register</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Register a new user account with email, username, and password</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;email&quot;:&quot;alice@example.com&quot;,&quot;username&quot;:&quot;alice&quot;,&quot;password&quot;:&quot;password123&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;id&quot;:1,&quot;username&quot;:&quot;alice&quot;,&quot;email&quot;:&quot;alice@example.com&quot;,&quot;role&quot;:&quot;BUYER&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">201</span><span class="code">400</span><span class="code">409</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/auth/login</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Authenticate user and return JWT access token with refresh cookie</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;username&quot;:&quot;alice&quot;,&quot;password&quot;:&quot;password123&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;accessToken&quot;:&quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...&quot;,&quot;expiresIn&quot;:900}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">400</span><span class="code">401</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/auth/refresh</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Rotate refresh token and issue new access token using refresh_token cookie</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;accessToken&quot;:&quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...&quot;,&quot;expiresIn&quot;:900}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">401</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/auth/logout</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Revoke refresh token and clear authentication cookie</p>
+<div class="io">
+</div>
+<div class="errs">Status: <span class="code">204</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/users/me</span>
+<span class="auth">Authenticated</span>
+</div>
+<p class="ep-sum">Fetch authenticated user profile details</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;id&quot;:1,&quot;username&quot;:&quot;alice&quot;,&quot;email&quot;:&quot;alice@example.com&quot;,&quot;role&quot;:&quot;BUYER&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">401</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/users/me/become-seller</span>
+<span class="auth">Authenticated</span>
+</div>
+<p class="ep-sum">Promote authenticated BUYER user to SELLER role (idempotent)</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;role&quot;:&quot;SELLER&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">401</span></div>
+</div>
+<h2 id="catalog">Catalog Service <span class="muted" style="font-weight:400;font-size:1rem">· :8082</span></h2>
+<p class="muted">Catalog and inventory service: shops, products, public browse/search, and atomic stock decrement</p>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/health</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Liveness check</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;status&quot;:&quot;UP&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/catalog/categories</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">List all seed categories</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>[{&quot;id&quot;:1,&quot;slug&quot;:&quot;electronics&quot;,&quot;nameEn&quot;:&quot;Electronics&quot;,&quot;nameTh&quot;:&quot;อิเล็กทรอนิกส์&quot;}]</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/catalog/products</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Browse and search active products with pagination (q, categoryId, page, size query params)</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;items&quot;:[{&quot;id&quot;:1,&quot;titleEn&quot;:&quot;Laptop&quot;,&quot;titleTh&quot;:&quot;แล็ปท็อป&quot;,&quot;priceBaht&quot;:25000,&quot;imageUrl&quot;:&quot;https://example.com/img.jpg&quot;,&quot;shopName&quot;:&quot;TechShop&quot;,&quot;stockQty&quot;:5}],&quot;page&quot;:0,&quot;total&quot;:42}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/catalog/products/{id}</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Get active product detail with shop name and all images</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;id&quot;:1,&quot;shopId&quot;:1,&quot;shopName&quot;:&quot;TechShop&quot;,&quot;categoryId&quot;:1,&quot;titleEn&quot;:&quot;Laptop&quot;,&quot;titleTh&quot;:&quot;แล็ปท็อป&quot;,&quot;descEn&quot;:&quot;High performance&quot;,&quot;descTh&quot;:&quot;ประสิทธิภาพสูง&quot;,&quot;priceBaht&quot;:25000,&quot;status&quot;:&quot;ACTIVE&quot;,&quot;imageUrls&quot;:[&quot;https://example.com/img1.jpg&quot;],&quot;stockQty&quot;:5}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">404</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/catalog/shops/{slug}</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Get shop details by slug with product list</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;id&quot;:1,&quot;ownerUsername&quot;:&quot;seller1&quot;,&quot;name&quot;:&quot;TechShop&quot;,&quot;slug&quot;:&quot;techshop&quot;,&quot;description&quot;:&quot;Your tech source&quot;,&quot;products&quot;:[]}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">404</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/catalog/shops</span>
+<span class="auth role-seller">SELLER</span>
+</div>
+<p class="ep-sum">Create a new shop for authenticated seller (one shop per seller)</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;name&quot;:&quot;TechShop&quot;,&quot;slug&quot;:&quot;techshop&quot;,&quot;description&quot;:&quot;Your tech source&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;id&quot;:1,&quot;ownerUsername&quot;:&quot;seller1&quot;,&quot;name&quot;:&quot;TechShop&quot;,&quot;slug&quot;:&quot;techshop&quot;,&quot;description&quot;:&quot;Your tech source&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">201</span><span class="code">400</span><span class="code">401</span><span class="code">409</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/catalog/shops/me</span>
+<span class="auth role-seller">SELLER</span>
+</div>
+<p class="ep-sum">Get the authenticated seller&#x27;s own shop</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;id&quot;:1,&quot;ownerUsername&quot;:&quot;seller1&quot;,&quot;name&quot;:&quot;TechShop&quot;,&quot;slug&quot;:&quot;techshop&quot;,&quot;description&quot;:&quot;Your tech source&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">401</span><span class="code">404</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/catalog/shops/me/products</span>
+<span class="auth role-seller">SELLER</span>
+</div>
+<p class="ep-sum">Create a new product in seller&#x27;s shop</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;categoryId&quot;:1,&quot;titleEn&quot;:&quot;Laptop&quot;,&quot;titleTh&quot;:&quot;แล็ปท็อป&quot;,&quot;descEn&quot;:&quot;High performance&quot;,&quot;descTh&quot;:&quot;ประสิทธิภาพสูง&quot;,&quot;priceBaht&quot;:25000,&quot;imageUrls&quot;:[&quot;https://example.com/img.jpg&quot;],&quot;stockQty&quot;:10,&quot;status&quot;:&quot;ACTIVE&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;id&quot;:1,&quot;shopId&quot;:1,&quot;categoryId&quot;:1,&quot;titleEn&quot;:&quot;Laptop&quot;,&quot;titleTh&quot;:&quot;แล็ปท็อป&quot;,&quot;descEn&quot;:&quot;High performance&quot;,&quot;descTh&quot;:&quot;ประสิทธิภาพสูง&quot;,&quot;priceBaht&quot;:25000,&quot;status&quot;:&quot;ACTIVE&quot;,&quot;imageUrls&quot;:[&quot;https://example.com/img.jpg&quot;],&quot;stockQty&quot;:10}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">201</span><span class="code">400</span><span class="code">401</span><span class="code">404</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/catalog/shops/me/products</span>
+<span class="auth role-seller">SELLER</span>
+</div>
+<p class="ep-sum">List all products in seller&#x27;s own shop</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>[{&quot;id&quot;:1,&quot;shopId&quot;:1,&quot;categoryId&quot;:1,&quot;titleEn&quot;:&quot;Laptop&quot;,&quot;titleTh&quot;:&quot;แล็ปท็อป&quot;,&quot;descEn&quot;:&quot;High performance&quot;,&quot;descTh&quot;:&quot;ประสิทธิภาพสูง&quot;,&quot;priceBaht&quot;:25000,&quot;status&quot;:&quot;ACTIVE&quot;,&quot;imageUrls&quot;:[&quot;https://example.com/img.jpg&quot;],&quot;stockQty&quot;:10}]</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">401</span><span class="code">404</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-put">PUT</span>
+<span class="ep-path">/api/catalog/shops/me/products/{id}</span>
+<span class="auth role-seller">SELLER</span>
+</div>
+<p class="ep-sum">Update a product in seller&#x27;s shop</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;categoryId&quot;:1,&quot;titleEn&quot;:&quot;Laptop Pro&quot;,&quot;titleTh&quot;:&quot;แล็ปท็อป โปร&quot;,&quot;descEn&quot;:&quot;Premium performance&quot;,&quot;descTh&quot;:&quot;ประสิทธิภาพพรีเมียม&quot;,&quot;priceBaht&quot;:30000,&quot;imageUrls&quot;:[&quot;https://example.com/img2.jpg&quot;],&quot;stockQty&quot;:8,&quot;status&quot;:&quot;ACTIVE&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;id&quot;:1,&quot;shopId&quot;:1,&quot;categoryId&quot;:1,&quot;titleEn&quot;:&quot;Laptop Pro&quot;,&quot;titleTh&quot;:&quot;แล็ปท็อป โปร&quot;,&quot;descEn&quot;:&quot;Premium performance&quot;,&quot;descTh&quot;:&quot;ประสิทธิภาพพรีเมียม&quot;,&quot;priceBaht&quot;:30000,&quot;status&quot;:&quot;ACTIVE&quot;,&quot;imageUrls&quot;:[&quot;https://example.com/img2.jpg&quot;],&quot;stockQty&quot;:8}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">400</span><span class="code">401</span><span class="code">403</span><span class="code">404</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-delete">DELETE</span>
+<span class="ep-path">/api/catalog/shops/me/products/{id}</span>
+<span class="auth role-seller">SELLER</span>
+</div>
+<p class="ep-sum">Delete a product from seller&#x27;s shop</p>
+<div class="io">
+</div>
+<div class="errs">Status: <span class="code">204</span><span class="code">401</span><span class="code">403</span><span class="code">404</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/catalog/inventory/decrement</span>
+<span class="auth role-internal">Internal (X-Internal-Key)</span>
+</div>
+<p class="ep-sum">Atomic, idempotent stock decrement (service-to-service via X-Internal-Key header)</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;items&quot;:[{&quot;productId&quot;:1,&quot;qty&quot;:2},{&quot;productId&quot;:2,&quot;qty&quot;:1}],&quot;idempotencyKey&quot;:&quot;order-123-abc&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;ok&quot;:true}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">400</span><span class="code">403</span><span class="code">409</span></div>
+</div>
+<h2 id="order">Order Service <span class="muted" style="font-weight:400;font-size:1rem">· :8083</span></h2>
+<p class="muted">Manages shopping carts and orders with atomic, all-or-nothing checkout and order lifecycle tracking for buyers and sellers</p>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/health</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Liveness probe</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;status&quot;: &quot;UP&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/orders/cart</span>
+<span class="auth role-buyer">BUYER</span>
+</div>
+<p class="ep-sum">View cart enriched with live catalog data (title, price, stock); returns empty cart if none exists</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;items&quot;: [{&quot;productId&quot;: 1, &quot;title&quot;: &quot;Product A&quot;, &quot;priceBaht&quot;: 150, &quot;qty&quot;: 2, &quot;lineTotal&quot;: 300, &quot;stockQty&quot;: 10}], &quot;total&quot;: 300}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">401</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/orders/cart/items</span>
+<span class="auth role-buyer">BUYER</span>
+</div>
+<p class="ep-sum">Add item to cart; merges quantities if product already present</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;productId&quot;: 1, &quot;qty&quot;: 2}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;items&quot;: [{&quot;productId&quot;: 1, &quot;title&quot;: &quot;Product A&quot;, &quot;priceBaht&quot;: 150, &quot;qty&quot;: 2, &quot;lineTotal&quot;: 300, &quot;stockQty&quot;: 10}], &quot;total&quot;: 300}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">400</span><span class="code">401</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-put">PUT</span>
+<span class="ep-path">/api/orders/cart/items/{productId}</span>
+<span class="auth role-buyer">BUYER</span>
+</div>
+<p class="ep-sum">Set quantity for a cart line item</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;qty&quot;: 5}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;items&quot;: [{&quot;productId&quot;: 1, &quot;title&quot;: &quot;Product A&quot;, &quot;priceBaht&quot;: 150, &quot;qty&quot;: 5, &quot;lineTotal&quot;: 750, &quot;stockQty&quot;: 10}], &quot;total&quot;: 750}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">400</span><span class="code">401</span><span class="code">404</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-delete">DELETE</span>
+<span class="ep-path">/api/orders/cart/items/{productId}</span>
+<span class="auth role-buyer">BUYER</span>
+</div>
+<p class="ep-sum">Remove item from cart</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;items&quot;: [], &quot;total&quot;: 0}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">401</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/orders/checkout</span>
+<span class="auth role-buyer">BUYER</span>
+</div>
+<p class="ep-sum">Atomically check out cart into per-shop orders; decrements inventory before creating orders; 409 if out of stock</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;orders&quot;: [{&quot;orderId&quot;: 101, &quot;shopName&quot;: &quot;Shop A&quot;, &quot;status&quot;: &quot;paid_mock&quot;, &quot;totalBaht&quot;: 300}]}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">201</span><span class="code">400</span><span class="code">401</span><span class="code">409</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/orders/me</span>
+<span class="auth role-buyer">BUYER</span>
+</div>
+<p class="ep-sum">List all orders placed by the authenticated buyer</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>[{&quot;orderId&quot;: 101, &quot;shopName&quot;: &quot;Shop A&quot;, &quot;status&quot;: &quot;paid_mock&quot;, &quot;totalBaht&quot;: 300, &quot;createdAt&quot;: &quot;2024-06-27T10:00:00Z&quot;, &quot;items&quot;: [{&quot;title&quot;: &quot;Product A&quot;, &quot;qty&quot;: 2, &quot;unitPriceBaht&quot;: 150}]}]</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">401</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/orders/shops/me</span>
+<span class="auth role-seller">SELLER</span>
+</div>
+<p class="ep-sum">List orders for the authenticated seller&#x27;s shop; optional status query parameter to filter by order status</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>[{&quot;orderId&quot;: 101, &quot;shopName&quot;: &quot;Shop A&quot;, &quot;status&quot;: &quot;paid_mock&quot;, &quot;totalBaht&quot;: 300, &quot;createdAt&quot;: &quot;2024-06-27T10:00:00Z&quot;, &quot;items&quot;: [{&quot;title&quot;: &quot;Product A&quot;, &quot;qty&quot;: 2, &quot;unitPriceBaht&quot;: 150}]}]</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">401</span><span class="code">404</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-patch">PATCH</span>
+<span class="ep-path">/api/orders/{id}/status</span>
+<span class="auth role-seller">SELLER</span>
+</div>
+<p class="ep-sum">Advance order status through guarded lifecycle: paid_mock → shipped → done</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;status&quot;: &quot;shipped&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;orderId&quot;: 101, &quot;status&quot;: &quot;shipped&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">400</span><span class="code">401</span><span class="code">403</span><span class="code">404</span></div>
+</div>
+<h2 id="chat">Chat Service <span class="muted" style="font-weight:400;font-size:1rem">· :8084</span></h2>
+<p class="muted">Real-time messaging service for marketplace buyers and sellers to communicate about products</p>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/health</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Health check endpoint</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;status&quot;:&quot;UP&quot;}</code></pre>
+</div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/chat/conversations</span>
+<span class="auth role-buyer">BUYER</span>
+</div>
+<p class="ep-sum">Create a new conversation for a product</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;productId&quot;:123}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;id&quot;:1,&quot;shopId&quot;:2,&quot;shopName&quot;:&quot;Example Shop&quot;,&quot;productId&quot;:123,&quot;lastMessageAt&quot;:&quot;2024-01-01T00:00:00Z&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">400</span><span class="code">401</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/chat/conversations</span>
+<span class="auth">Authenticated</span>
+</div>
+<p class="ep-sum">List conversations for authenticated user with preview and unread count</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>[{&quot;id&quot;:1,&quot;shopId&quot;:2,&quot;shopName&quot;:&quot;Shop&quot;,&quot;productId&quot;:123,&quot;channel&quot;:&quot;web&quot;,&quot;displayName&quot;:&quot;John&quot;,&quot;lastMessage&quot;:&quot;Hi there&quot;,&quot;unread&quot;:2,&quot;lastMessageAt&quot;:&quot;2024-01-01T12:00:00Z&quot;}]</code></pre>
+</div>
+<div class="errs">Status: <span class="code">401</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/chat/conversations/{id}/read</span>
+<span class="auth">Authenticated</span>
+</div>
+<p class="ep-sum">Mark conversation as read; returns 204 No Content</p>
+<div class="io">
+</div>
+<div class="errs">Status: <span class="code">401</span><span class="code">403</span><span class="code">404</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/chat/conversations/{conversationId}/messages</span>
+<span class="auth">Authenticated</span>
+</div>
+<p class="ep-sum">Retrieve message history with pagination (before and limit query params)</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>[{&quot;id&quot;:1,&quot;conversationId&quot;:1,&quot;senderUsername&quot;:&quot;user1&quot;,&quot;body&quot;:&quot;Hello!&quot;,&quot;createdAt&quot;:&quot;2024-01-01T00:00:00Z&quot;}]</code></pre>
+</div>
+<div class="errs">Status: <span class="code">401</span><span class="code">404</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/internal/chat/inbound</span>
+<span class="auth role-internal">Internal (X-Internal-Key)</span>
+</div>
+<p class="ep-sum">Receive inbound message from external channel (Facebook/Instagram); guarded by X-Internal-Key header</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;channel&quot;:&quot;fb&quot;,&quot;shopId&quot;:1,&quot;externalId&quot;:&quot;ext-msg-123&quot;,&quot;displayName&quot;:&quot;John&quot;,&quot;body&quot;:&quot;Hello from FB&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;conversationId&quot;:1,&quot;messageId&quot;:5}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">400</span><span class="code">403</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-ws">WS</span>
+<span class="ep-path">/ws/chat</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">WebSocket auth frame: client sends JWT token to establish connection</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;type&quot;:&quot;auth&quot;,&quot;token&quot;:&quot;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;type&quot;:&quot;authed&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">401</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-ws">WS</span>
+<span class="ep-path">/ws/chat</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">WebSocket authed frame: server confirms successful authentication</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;type&quot;:&quot;authed&quot;}</code></pre>
+</div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-ws">WS</span>
+<span class="ep-path">/ws/chat</span>
+<span class="auth">Authenticated</span>
+</div>
+<p class="ep-sum">WebSocket send frame: authenticated client sends message to conversation</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;type&quot;:&quot;send&quot;,&quot;conversationId&quot;:1,&quot;body&quot;:&quot;Thanks!&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;type&quot;:&quot;message&quot;,&quot;message&quot;:{&quot;id&quot;:5,&quot;conversationId&quot;:1,&quot;senderUsername&quot;:&quot;user1&quot;,&quot;body&quot;:&quot;Thanks!&quot;,&quot;createdAt&quot;:&quot;2024-01-01T12:34:56Z&quot;}}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">403</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-ws">WS</span>
+<span class="ep-path">/ws/chat</span>
+<span class="auth">Authenticated</span>
+</div>
+<p class="ep-sum">WebSocket message frame: server broadcasts message to all conversation participants</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;type&quot;:&quot;message&quot;,&quot;message&quot;:{&quot;id&quot;:5,&quot;conversationId&quot;:1,&quot;senderUsername&quot;:&quot;seller1&quot;,&quot;body&quot;:&quot;Thanks!&quot;,&quot;createdAt&quot;:&quot;2024-01-01T12:34:56Z&quot;}}</code></pre>
+</div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-ws">WS</span>
+<span class="ep-path">/ws/chat</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">WebSocket error frame: server sends on invalid frame type or authentication failure</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;type&quot;:&quot;error&quot;,&quot;detail&quot;:&quot;unsupported: invalid&quot;}</code></pre>
+</div>
+</div>
+<h2 id="social">Social Service <span class="muted" style="font-weight:400;font-size:1rem">· :8085</span></h2>
+<p class="muted">Manages Facebook/Instagram connections for sellers and relays social messages to unified chat inbox</p>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/health</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Service health status</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;status&quot;:&quot;UP&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/internal/social/send</span>
+<span class="auth role-internal">Internal (X-Internal-Key)</span>
+</div>
+<p class="ep-sum">Internal endpoint for chat service to send seller reply to external social channel</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;shopId&quot;:123,&quot;channel&quot;:&quot;fb&quot;,&quot;externalId&quot;:&quot;page_123_user_456&quot;,&quot;body&quot;:&quot;Thank you for reaching out&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;status&quot;:&quot;SENT&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">400</span><span class="code">403</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/webhooks/fb</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Meta webhook subscription verification handshake (echoes challenge on valid token)</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>&quot;challenge_string_value&quot;</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span><span class="code">403</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/webhooks/fb</span>
+<span class="auth">Public</span>
+</div>
+<p class="ep-sum">Meta webhook for receiving inbound Facebook/Instagram messages relayed to chat service</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;entry&quot;:[{&quot;messaging&quot;:[{&quot;sender&quot;:{&quot;id&quot;:&quot;page_scoped_id_123&quot;},&quot;recipient&quot;:{&quot;id&quot;:&quot;page_id_456&quot;},&quot;message&quot;:{&quot;text&quot;:&quot;Hello seller&quot;}}]}]}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;status&quot;:&quot;EVENT_RECEIVED&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">200</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/social/connections</span>
+<span class="auth role-seller">SELLER</span>
+</div>
+<p class="ep-sum">Connect Facebook page to seller&#x27;s shop</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;pageId&quot;:&quot;123456789&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;pageId&quot;:&quot;123456789&quot;,&quot;shopId&quot;:1,&quot;channel&quot;:&quot;fb&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">400</span><span class="code">401</span><span class="code">403</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/social/simulate-inbound</span>
+<span class="auth">Authenticated</span>
+</div>
+<p class="ep-sum">Simulate inbound social message for development/testing without Meta webhook</p>
+<div class="io">
+<div class="lbl">Request</div>
+<pre><code>{&quot;pageId&quot;:&quot;123&quot;,&quot;externalId&quot;:&quot;user_456&quot;,&quot;displayName&quot;:&quot;John Doe&quot;,&quot;body&quot;:&quot;Test message&quot;}</code></pre>
+<div class="lbl">Response</div>
+<pre><code>{&quot;status&quot;:&quot;SIMULATED&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">400</span><span class="code">401</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-post">POST</span>
+<span class="ep-path">/api/social/sync</span>
+<span class="auth role-seller">SELLER</span>
+</div>
+<p class="ep-sum">Sync seller&#x27;s catalog products to Facebook catalog</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;synced&quot;:15,&quot;syncedAt&quot;:&quot;2025-01-15T10:30:00Z&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">401</span><span class="code">403</span></div>
+</div>
+<div class="ep">
+<div class="ep-head">
+<span class="badge m-get">GET</span>
+<span class="ep-path">/api/social/sync</span>
+<span class="auth role-seller">SELLER</span>
+</div>
+<p class="ep-sum">Get status of seller&#x27;s catalog sync to Facebook</p>
+<div class="io">
+<div class="lbl">Response</div>
+<pre><code>{&quot;count&quot;:15,&quot;lastSyncedAt&quot;:&quot;2025-01-15T10:30:00Z&quot;}</code></pre>
+</div>
+<div class="errs">Status: <span class="code">401</span><span class="code">403</span></div>
+</div>
+  <h2 id="errors">Error Codes</h2>
+  <p>Errors use <b>RFC 7807</b> <code>application/problem+json</code>:</p>
+  <pre><code>{
+  "type": "about:blank",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "out of stock: [1]",
+  "instance": "/api/orders/checkout"
+}</code></pre>
+  <table>
+    <tr><th>Code</th><th>ความหมาย</th></tr>
+    <tr><td><code>200 / 201 / 204</code></td><td>สำเร็จ (204 = ไม่มี body)</td></tr>
+    <tr><td><code>400</code></td><td>คำขอไม่ถูกต้อง (validation)</td></tr>
+    <tr><td><code>401</code></td><td>ไม่ได้ยืนยันตัวตน / token หมดอายุ</td></tr>
+    <tr><td><code>403</code></td><td>ไม่มีสิทธิ์ (บทบาทไม่ถูก / ไม่ใช่เจ้าของ / internal key ผิด)</td></tr>
+    <tr><td><code>404</code></td><td>ไม่พบทรัพยากร</td></tr>
+    <tr><td><code>409</code></td><td>ขัดแย้ง — สินค้าหมด (oversell) หรือข้อมูลซ้ำ</td></tr>
+    <tr><td><code>500</code></td><td>ข้อผิดพลาดฝั่งเซิร์ฟเวอร์</td></tr>
+  </table>
+  <h3>WebSocket close codes (<code>/ws/chat</code>)</h3>
+  <table>
+    <tr><th>Code</th><th>ความหมาย</th></tr>
+    <tr><td><code>4401</code></td><td>ยืนยันตัวตนล้มเหลว (เฟรมแรกไม่ใช่ auth หรือ token ไม่ถูก)</td></tr>
+    <tr><td><code>4403</code></td><td>ไม่ใช่คู่สนทนาของห้องนั้น</td></tr>
+  </table>
+
+  <h2 id="changelog">Changelog</h2>
+  <table>
+    <tr><th>เวอร์ชัน</th><th>สิ่งที่เพิ่ม</th></tr>
+    <tr><td><b>P3b</b></td><td>Product sync — <code>POST/GET /api/social/sync</code> ดันสินค้าไป FB catalog (mock)</td></tr>
+    <tr><td><b>P3a</b></td><td>Omnichannel inbox — FB Messenger ↔ กล่องแชตรวม (<code>/webhooks/fb</code>, <code>/internal/chat/inbound</code>, mock Meta)</td></tr>
+    <tr><td><b>P2</b></td><td>Real-time chat — REST <code>/api/chat</code> + WebSocket <code>/ws/chat</code>, unread, product context</td></tr>
+    <tr><td><b>P1</b></td><td>Core marketplace — catalog + inventory (atomic decrement), cart/checkout (no oversell), orders</td></tr>
+    <tr><td><b>P0</b></td><td>Foundation — Kong gateway + <code>jwt-hs512</code> plugin, auth (register/login/refresh/roles), common lib</td></tr>
+  </table>
+</div>
+<footer>Marketplace API · <a href="operations.html">← ผู้ดูแลระบบ</a> · <a href="index.html">หน้าแรก</a></footer>
+</body>
+</html>

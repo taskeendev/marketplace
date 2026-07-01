@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คู่มือผู้ดูแลระบบ — Marketplace</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="nav">
+  <span class="brand">Marketplace<span>Docs</span></span>
+  <a class="link" href="index.html">หน้าแรก</a>
+  <a class="link" href="buyer.html">ผู้ซื้อ</a>
+  <a class="link" href="seller.html">ผู้ขาย</a>
+  <a class="link" href="developer.html">Developer (API)</a>
+  <a class="link active" href="operations.html">ผู้ดูแลระบบ</a>
+</nav>
+
+<div class="wrap">
+  <span class="pill">🚀 ผู้ดูแลระบบ / DevOps</span>
+  <h1>รันและดูแลระบบ</h1>
+  <p class="lead">ยกทั้ง stack ด้วยคำสั่งเดียว + ตรวจสุขภาพด้วย smoke test</p>
+
+  <h2>สถาปัตยกรรม</h2>
+  <p>ทุก request เข้าผ่าน <b>Kong gateway</b> (พอร์ต 8080) — Kong ตรวจ JWT (ปลั๊กอิน Lua <code>jwt-hs512</code>) แล้วฉีดเฮดเดอร์
+  <code>X-Auth-User</code> / <code>X-Auth-Role</code> ให้ service ปลายทางเชื่อถือ · แต่ละ service มีฐานข้อมูลของตัวเอง (DB-per-service)</p>
+  <pre>          ┌─────────────┐
+  Browser →│ Kong :8080  │→ auth :8081     ─ authdb
+          │ (jwt-hs512) │→ catalog :8082  ─ catalogdb
+          └─────────────┘→ order :8083    ─ orderdb   → (calls catalog: decrement stock)
+                         → chat :8084     ─ chatdb    → (calls catalog / social)
+                         → social :8085   ─ socialdb  → (calls catalog / chat)</pre>
+
+  <table>
+    <tr><th>Repo</th><th>พอร์ต</th><th>หน้าที่</th></tr>
+    <tr><td>marketplace-gateway</td><td>8080</td><td>Kong DB-less + ปลั๊กอิน <code>jwt-hs512</code></td></tr>
+    <tr><td>marketplace-auth</td><td>8081</td><td>สมัคร/ล็อกอิน/JWT+refresh/roles</td></tr>
+    <tr><td>marketplace-catalog</td><td>8082</td><td>หมวดหมู่/ร้าน/สินค้า + ตัดสต็อกอะตอมมิก</td></tr>
+    <tr><td>marketplace-order</td><td>8083</td><td>ตะกร้า/checkout/ออเดอร์/สถานะ</td></tr>
+    <tr><td>marketplace-chat</td><td>8084</td><td>แชตเรียลไทม์ (REST + WebSocket)</td></tr>
+    <tr><td>marketplace-social</td><td>8085</td><td>FB gateway (webhook/connect/sync, mock)</td></tr>
+    <tr><td>marketplace-web</td><td>3000/5173</td><td>React 19 / Vite / TS</td></tr>
+    <tr><td>marketplace-common</td><td>—</td><td>ไลบรารีร่วม (JWT verify, header auth, RFC7807)</td></tr>
+    <tr><td>marketplace-deploy</td><td>—</td><td>docker-compose + run.sh + smoke.sh</td></tr>
+  </table>
+
+  <h2>Prerequisites</h2>
+  <ul>
+    <li>Docker + Docker Compose</li>
+    <li>JDK 21 &amp; Maven (สำหรับ build jar) · Node.js 20+ (สำหรับ web dev)</li>
+    <li>clone repo <code>marketplace-*</code> ทั้งหมดไว้ในโฟลเดอร์แม่เดียวกัน</li>
+  </ul>
+
+  <h2>รัน stack (คำสั่งเดียว)</h2>
+  <pre>cd marketplace-deploy
+cp .env.example .env          # ปรับ JWT_SECRET ให้ยาว ≥ 64 bytes ก่อนใช้จริง
+./run.sh --build -d           # build jar ทุกตัว, render kong.yml, ยก stack
+./smoke.sh                    # ตรวจ end-to-end 12 ข้อ ผ่าน Kong</pre>
+  <p>เว็บ (โหมด dev): <code>cd marketplace-web &amp;&amp; npm run dev</code> → <code>http://localhost:5173</code></p>
+  <div class="note warn">Kong แบบ DB-less อ่าน <code>kong.yml</code> ตอนสตาร์ทเท่านั้น — ถ้าแก้ route ต้อง <code>docker compose up -d --force-recreate kong</code></div>
+
+  <h2>Smoke test (12 ข้อ)</h2>
+  <p><code>smoke.sh</code> ทดสอบทั้งลูปผ่าน Kong จริง:</p>
+  <ol>
+    <li>health · 2) seller onboarding · 3) เปิดร้าน+สินค้า</li>
+    <li value="4">buyer checkout → สต็อกลด · 5) seller เห็นออเดอร์</li>
+    <li value="6"><b>oversell:</b> checkout ขนาน 2 อันบน stock=1 → สำเร็จ 1 / 409 อีก 1</li>
+    <li value="7">seller เลื่อนสถานะ · 8) guards (400/403)</li>
+    <li value="9">chat REST 401 + WS upgrade 101 + สร้างห้อง</li>
+    <li value="10"><b>2-client WS:</b> buyer ส่ง → seller รับสด ผ่าน Kong</li>
+    <li value="11"><b>FB inbound</b> → โผล่ในกล่องแชต seller</li>
+    <li value="12"><b>product sync</b> → seller sync สินค้าไป FB catalog</li>
+  </ol>
+
+  <h2>Config (ตัวแปรหลักใน .env)</h2>
+  <table>
+    <tr><th>ตัวแปร</th><th>ความหมาย</th></tr>
+    <tr><td><code>JWT_SECRET</code></td><td>คีย์ HS512 (≥ 64 bytes) — ต้องตรงกันทุก service + Kong</td></tr>
+    <tr><td><code>INTERNAL_API_KEY</code></td><td>ซีเคร็ตเรียกภายใน (order→catalog, social↔chat)</td></tr>
+    <tr><td><code>FB_VERIFY_TOKEN</code></td><td>โทเคน verify webhook ของ Meta</td></tr>
+    <tr><td><code>KONG_PROXY_PORT</code></td><td>พอร์ตขาเข้า (ดีฟอลต์ 8080)</td></tr>
+    <tr><td><code>*_POSTGRES_*</code></td><td>ชื่อ DB/user/pass ต่อ service</td></tr>
+    <tr><td><code>*_TARGET</code></td><td>ปลายทาง upstream ที่ Kong route ไป</td></tr>
+  </table>
+
+  <h2>Health checks</h2>
+  <p>ทุก service มี <code>GET /health</code> → <code>{"status":"UP"}</code> · ผ่าน Kong: <code>curl http://localhost:8080/health</code></p>
+</div>
+
+<footer>Marketplace · <a href="developer.html">← Developer API</a> · <a href="index.html">หน้าแรก</a></footer>
+</body>
+</html>

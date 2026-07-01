@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คู่มือผู้ซื้อ — Marketplace</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="nav">
+  <span class="brand">Marketplace<span>Docs</span></span>
+  <a class="link" href="index.html">หน้าแรก</a>
+  <a class="link active" href="buyer.html">ผู้ซื้อ</a>
+  <a class="link" href="seller.html">ผู้ขาย</a>
+  <a class="link" href="developer.html">Developer (API)</a>
+  <a class="link" href="operations.html">ผู้ดูแลระบบ</a>
+</nav>
+
+<div class="wrap">
+  <span class="pill">🛒 คู่มือผู้ซื้อ</span>
+  <h1>ซื้อสินค้าบน Marketplace</h1>
+  <p class="lead">ตั้งแต่สมัครสมาชิกจนถึงสั่งซื้อและคุยกับผู้ขาย — ทำได้ในไม่กี่นาที</p>
+
+  <div class="note">เปิดเว็บที่ <code>http://localhost:5173</code> (โหมด dev) — หรือกดปุ่ม <b>Dev quick login</b> ที่หน้าเข้าสู่ระบบเพื่อเข้าเป็นผู้ซื้อทันที</div>
+
+  <h2>1. สมัคร & เข้าสู่ระบบ</h2>
+  <ol class="steps">
+    <li><b>สมัครสมาชิก</b> กรอกอีเมล ชื่อผู้ใช้ รหัสผ่าน — ระบบจะให้บทบาท <code>ผู้ซื้อ (BUYER)</code> อัตโนมัติ</li>
+    <li><b>เข้าสู่ระบบ</b> ระบบจดจำเซสชันให้ (มี refresh token) ไม่ต้องล็อกอินบ่อย</li>
+  </ol>
+
+  <h2>2. ค้นหา & ดูสินค้า</h2>
+  <ol class="steps">
+    <li><b>หน้าแรก</b> แสดงสินค้าทั้งหมด — <b>ค้นหา</b>ด้วยชื่อ หรือกรองตามหมวดหมู่</li>
+    <li><b>หน้ารายละเอียดสินค้า</b> เห็นรูป ราคา จำนวนคงเหลือ และร้านค้า</li>
+  </ol>
+
+  <h2>3. ตะกร้า & สั่งซื้อ</h2>
+  <ol class="steps">
+    <li><b>หยิบใส่ตะกร้า</b> เลือกจำนวนแล้วกด "หยิบใส่ตะกร้า" (ต้องเข้าสู่ระบบก่อน)</li>
+    <li><b>ตรวจตะกร้า</b> ปรับจำนวน/ลบสินค้า — ระบบแสดงราคาและสต็อกล่าสุดเสมอ</li>
+    <li><b>ชำระเงิน (Checkout)</b> ระบบตัดสต็อกแบบ <b>อะตอมมิก</b> — ถ้าของเหลือชิ้นเดียวแล้วมีคนซื้อพร้อมกัน จะสำเร็จเพียงคนเดียว (กันการขายเกิน)</li>
+  </ol>
+  <div class="note warn">ถ้าสินค้าหมดระหว่างกดสั่งซื้อ ระบบจะแจ้งเตือน (สถานะ <code>409</code>) ให้ปรับจำนวนแล้วลองใหม่ — จะไม่มีการหักเงิน/สต็อกครึ่งๆ</div>
+
+  <h2>4. ดูออเดอร์ของฉัน</h2>
+  <p>เมนู "ออเดอร์" แสดงรายการที่สั่งทั้งหมด พร้อมสถานะ: <code>paid_mock</code> (ชำระแล้ว) → <code>shipped</code> (จัดส่งแล้ว) → <code>done</code> (สำเร็จ)</p>
+
+  <h2>5. แชตกับผู้ขาย</h2>
+  <ol class="steps">
+    <li>ในหน้าสินค้า กด <b>"แชตกับผู้ขาย"</b> — เปิดห้องแชตพร้อมการ์ดสินค้าที่สนใจ</li>
+    <li>พิมพ์คุยได้ทันที ข้อความ <b>เด้งเรียลไทม์</b> ทั้งสองฝั่ง (WebSocket)</li>
+    <li>ไอคอนแชตบนแถบเมนูมี <b>ตัวเลขแจ้งข้อความใหม่</b> (unread)</li>
+  </ol>
+
+  <div class="note">💡 ผู้ขายบางรายเชื่อม Facebook ไว้ — แต่ในฝั่งคุณ (ผู้ซื้อบนเว็บ) ประสบการณ์เหมือนเดิมทุกอย่าง</div>
+</div>
+
+<footer>Marketplace · <a href="index.html">กลับหน้าแรก</a> · <a href="seller.html">คู่มือผู้ขาย →</a></footer>
+</body>
+</html>

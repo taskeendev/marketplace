@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คู่มือผู้ขาย — Marketplace</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="nav">
+  <span class="brand">Marketplace<span>Docs</span></span>
+  <a class="link" href="index.html">หน้าแรก</a>
+  <a class="link" href="buyer.html">ผู้ซื้อ</a>
+  <a class="link active" href="seller.html">ผู้ขาย</a>
+  <a class="link" href="developer.html">Developer (API)</a>
+  <a class="link" href="operations.html">ผู้ดูแลระบบ</a>
+</nav>
+
+<div class="wrap">
+  <span class="pill">🏪 คู่มือผู้ขาย</span>
+  <h1>ขายของบน Marketplace</h1>
+  <p class="lead">เปิดร้าน จัดการสินค้า/ออเดอร์ ตอบลูกค้าทุกช่องที่เดียว และเชื่อม Facebook</p>
+
+  <div class="note">กด <b>Dev quick login → "เข้าเป็นผู้ขาย"</b> ที่หน้าเข้าสู่ระบบ เพื่อเข้าเป็นผู้ขายที่มีร้าน+สินค้าตัวอย่างทันที</div>
+
+  <h2>1. เป็นผู้ขาย & เปิดร้าน</h2>
+  <ol class="steps">
+    <li><b>สมัครเป็นผู้ขาย</b> จากบัญชีผู้ซื้อ กด "เป็นผู้ขาย" — บทบาทอัปเกรดเป็น <code>SELLER</code> (โทเคนจะรีเฟรชให้)</li>
+    <li><b>เปิดร้าน</b> ตั้งชื่อร้าน + คำอธิบาย — ผู้ขายหนึ่งคนมีหนึ่งร้าน</li>
+  </ol>
+
+  <h2>2. จัดการสินค้า</h2>
+  <ol class="steps">
+    <li><b>เพิ่มสินค้า</b> กรอกชื่อ (ไทย/อังกฤษ) หมวดหมู่ ราคา จำนวนสต็อก และ URL รูป</li>
+    <li><b>แก้ไข / ลบ</b> สินค้าได้ตลอด — ราคา/สต็อกอัปเดตเห็นผลทันทีฝั่งผู้ซื้อ</li>
+  </ol>
+
+  <h2>3. จัดการออเดอร์</h2>
+  <ol class="steps">
+    <li><b>ดูออเดอร์ร้าน</b> รายการคำสั่งซื้อของร้านคุณ พร้อมกรองตามสถานะ</li>
+    <li><b>เลื่อนสถานะ</b> ตามลำดับที่กำหนด: <code>paid_mock</code> → <code>shipped</code> → <code>done</code>
+      <span class="muted">(ข้ามขั้นไม่ได้ และแก้ได้เฉพาะออเดอร์ของร้านตัวเอง)</span></li>
+  </ol>
+
+  <h2>4. กล่องแชตรวม (Omnichannel)</h2>
+  <p>เมนู <b>"แชต"</b> รวมข้อความจากลูกค้าทุกช่องไว้ที่เดียว — มี <b>ป้ายบอกช่อง</b> ว่ามาจากเว็บหรือ Facebook</p>
+  <ol class="steps">
+    <li>ลูกค้าเว็บทักจากหน้าสินค้า → เข้ากล่องนี้ (เห็นการ์ดสินค้าที่คุย)</li>
+    <li>ลูกค้า Facebook ทักมา → เข้ากล่องเดียวกัน มีป้าย <b>FB</b> + ชื่อลูกค้า</li>
+    <li>คุณตอบจากที่เดียว ข้อความส่งกลับไปยังช่องต้นทางอัตโนมัติ</li>
+  </ol>
+
+  <h2>5. เชื่อม Facebook & sync สินค้า</h2>
+  <p>ในหน้าแดชบอร์ดผู้ขาย มีการ์ด <b>"Facebook (จำลอง)"</b>:</p>
+  <ol class="steps">
+    <li><b>เชื่อมเพจ</b> ใส่ Page ID แล้วกดเชื่อม — ผูกเพจกับร้านของคุณ</li>
+    <li><b>จำลองข้อความเข้า</b> (ปุ่ม dev) เพื่อทดสอบว่าข้อความ FB เด้งเข้ากล่องแชต</li>
+    <li><b>Sync สินค้าไป Facebook</b> กดปุ่มเดียว ดันสินค้าทั้งร้านขึ้น FB catalog + เห็นสถานะจำนวนที่ sync แล้ว</li>
+  </ol>
+  <div class="note warn">ปัจจุบันการต่อ Facebook เป็นแบบ <b>จำลอง (mock)</b> — สถาปัตยกรรมพร้อมแล้ว จะเสียบ Meta Graph API จริงเมื่อผ่าน Business verification</div>
+</div>
+
+<footer>Marketplace · <a href="buyer.html">← คู่มือผู้ซื้อ</a> · <a href="index.html">หน้าแรก</a> · <a href="developer.html">Developer API →</a></footer>
+</body>
+</html>
