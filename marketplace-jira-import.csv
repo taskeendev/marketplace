@@ -190,7 +190,7 @@ Story,P3c-T2 web: Login with Facebook,,P3 omnichannel social,FE,Done,"ทำ: we
 
 Verify: npm run build; login-url redirect FB; callback set token"
 Epic,P4: Hermes AI agent + admin,P4 Hermes AI + admin,,,To Do,"เป้าหมาย: ตอบลูกค้าอัตโนมัติ (เรียกข้อมูลจริง) + เครื่องมือ admin. marketplace-agent รัน Hermes (self-host), ห่อ catalog/order เป็น tool/MCP, guardrail, hook เข้า chat. admin: นาทีทอง (flash-sale), ban (user/ร้าน/สินค้า), จัดการ caption. ⚠️ เคาะโมเดลไทย+งบ LLM ก่อนเริ่ม"
-Story,P4a-T1 agent: scaffold + config + tools,,P4 Hermes AI + admin,BE,To Do,"ทำ: scaffold marketplace-agent (:8086, agentdb, common) + agent_config + POST/GET /api/agent/config (SELLER toggle) + CatalogClient/OrderClient read-only tools
+Story,P4a-T1 agent: scaffold + config + tools,,P4 Hermes AI + admin,BE,Done,"ทำ: scaffold marketplace-agent (:8086, agentdb, common) + agent_config + POST/GET /api/agent/config (SELLER toggle) + CatalogClient/OrderClient read-only tools
 
 Verify: boot+test; toggle เปิด/ปิดต่อร้าน"
 Story,P4a-T2 chat: /internal/chat/reply + notify agent,,P4 Hermes AI + admin,BE,To Do,"ทำ: chat: POST /internal/chat/reply (บอท reply sender=hermes + broadcast + outbound relay) + AgentClient + ยิง agent เมื่อมีข้อความฝั่งลูกค้า (best-effort, กัน loop) + AGENT_URL
