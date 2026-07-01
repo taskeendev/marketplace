@@ -1,0 +1,187 @@
+Issue Type,Summary,Epic Name,Epic Link,Labels,Status,Description
+Epic,P0: รากฐาน (Foundation),P0 รากฐาน,,,Done,"เป้าหมาย: gateway + auth + web shell รันทั้ง stack ด้วย docker-compose ในเครื่อง → สมัคร/ล็อกอินผ่าน Kong เข้าหน้า account ได้จริง (8 task)
+
+API (ผ่าน Kong :8080):
+POST /api/auth/register · public → in {email,username,password} → 201 {id,username,email,role:BUYER} · err 400,409
+POST /api/auth/login · public → in {username,password} → 200 {accessToken,expiresIn}+Set-Cookie refresh · err 401
+POST /api/auth/refresh · cookie → 200 {accessToken,expiresIn} · err 401
+POST /api/auth/logout · Bearer → 204 · err 401
+GET /api/users/me · Bearer → 200 {id,username,email,role} · err 401
+GET /health · public → 200 {status:UP}"
+Story,P0-T1: marketplace-common,,P0 รากฐาน,BE,Done,"ทำ: lib กลาง (Java): JwtVerifier(HS512) + RFC7807 error model + @RestControllerAdvice handler → publish com.taskeendev:marketplace-common:0.1.0 ไป GitHub Packages
+
+Verify: mvn -q -DskipTests install ผ่าน + service อื่น depend แล้ว resolve ได้"
+Story,P0-T2: marketplace-auth scaffold,,P0 รากฐาน,BE,Done,"ทำ: Boot+Maven+Postgres+Flyway+common+springdoc · Flyway V1__users.sql, V2__refresh_tokens.sql
+
+Verify: Testcontainers ขึ้น Postgres + app boot + /health→200 + /swagger-ui ขึ้น"
+Story,P0-T3: auth register/login/JWT,,P0 รากฐาน,BE,Done,"ทำ: issue access JWT(HS512, TTL 15m, sub=username, role) + refresh (hash เก็บ DB, HttpOnly cookie 14 วัน)
+
+Verify: integration test register→login ได้ token, /users/me ใช้ token ได้"
+Story,P0-T4: auth refresh/logout/me + roles,,P0 รากฐาน,BE,Done,"ทำ: rotate refresh + reuse-detection; role default BUYER
+
+Verify: test refresh ได้ token ใหม่, logout แล้วใช้ refresh เดิมไม่ได้"
+Story,P0-T5: marketplace-gateway (Kong),,P0 รากฐาน,GW,Done,"ทำ: declarative kong.yml: route /api/auth,/api/users→auth; plugin verify HS512 + inject X-Auth-User/Role; rate-limit; CORS; correlation-id
+
+Verify: ยิงผ่าน :8080 ทะลุไป auth, token เสีย→401 ที่ Kong"
+Story,P0-T6: marketplace-deploy,,P0 รากฐาน,Infra,Done,"ทำ: docker-compose.yml (kong+auth+postgres-auth) + .env.example + run.sh + smoke.sh
+
+Verify: ./run.sh --build -d ขึ้นครบ healthy"
+Story,P0-T7: marketplace-web shell,,P0 รากฐาน,FE,Done,"ทำ: Vite/TS/Tailwind/shadcn: config.ts(env), api/client.ts(fetch+JWT memory+refresh-on-401), auth.tsx+ProtectedRoute, i18n locales/{en,th}.ts, หน้า Login/Register/Account, ApiStatus
+
+Verify: npm run build ผ่าน, ล็อกอินผ่าน Kong ได้, สลับ TH/EN ได้"
+Story,P0-T8: smoke P0,,P0 รากฐาน,Infra,Done,"ทำ: smoke.sh: register→login→/users/me ผ่าน gateway = 200
+
+Verify: smoke เขียว"
+Epic,P1: แก่น marketplace (web MVP),P1 แก่น marketplace,,,Done,"เป้าหมาย: marketplace หลายผู้ขายครบลูปบน web — เปิดร้าน/ลงสินค้า/ตั้งสต็อก; ผู้ซื้อค้นหา-ใส่ตะกร้า-checkout(จำลอง)-ดูออเดอร์; ตัดสต็อก atomic กัน oversell; ผู้ขายอัปสถานะ; TH/EN (~14 task)
+
+API catalog:
+GET /api/catalog/categories · public → 200 [{id,slug,nameEn,nameTh}]
+POST /api/catalog/shops · SELLER → in {name,slug?,description} → 201 {shop} · err 403,409
+GET /api/catalog/shops/me · SELLER → 200 {shop} · err 404
+GET /api/catalog/shops/{slug} · public → 200 {shop+products} · err 404
+POST /api/catalog/shops/me/products · SELLER → in {categoryId,titleEn,titleTh,descEn,descTh,priceBaht,imageUrls[],stockQty,status?} → 201 {product} · err 400,403
+PUT /api/catalog/shops/me/products/{id} · SELLER → 200 {product} · err 400,403,404
+GET /api/catalog/shops/me/products · SELLER → 200 [{product+stockQty}] · err 403
+GET /api/catalog/products · public → ?q=&categoryId=&page=&size= → 200 {items[],page,total}
+GET /api/catalog/products/{id} · public → 200 {product+images+stockQty} · err 404
+POST /api/catalog/inventory/decrement · internal → in {items[{productId,qty}],idempotencyKey} → 200 {ok:true} · err 409 {outOfStock[]}
+
+API order:
+GET /api/orders/cart · BUYER → 200 {items[],total} · err 401
+POST /api/orders/cart/items · BUYER → in {productId,qty} → 200 {cart} · err 400,404
+PUT /api/orders/cart/items/{productId} · BUYER → in {qty} → 200 {cart} · err 400,404
+DELETE /api/orders/cart/items/{productId} · BUYER → 200 {cart} · err 404
+POST /api/orders/checkout · BUYER → 201 {orders[{orderId,shopName,status:paid_mock,totalBaht}]} · err 409 {outOfStock[]}
+GET /api/orders/me · BUYER → 200 [orders+items] · err 401
+GET /api/orders/shops/me · SELLER → ?status= → 200 [orders ของร้าน] · err 403
+PATCH /api/orders/{id}/status · SELLER → in {status} → 200 {orderId,status} · err 400,403,404
+
+API auth (เพิ่ม):
+POST /api/users/me/become-seller · Bearer → 200 {role:SELLER} (ต้อง refresh token) · err 401"
+Story,P1-T1: catalog scaffold + category,,P1 แก่น marketplace,BE,Done,"ทำ: Boot+Maven+Postgres+Flyway · category + seed (Fashion/Food/Gadget…) · GET /api/catalog/categories
+
+Verify: คืน list หมวด"
+Story,P1-T2: auth become-seller,,P1 แก่น marketplace,BE,Done,"ทำ: POST /api/users/me/become-seller เปลี่ยน role→SELLER (ต้อง refresh token ใหม่)
+
+Verify: test BUYER→SELLER"
+Story,P1-T3: shop,,P1 แก่น marketplace,BE,Done,"ทำ: สร้าง/ดูร้าน (เจ้าของ 1 ร้าน/คนใน MVP)
+
+Verify: SELLER สร้างร้านได้, BUYER โดน 403"
+Story,P1-T4: product CRUD (seller),,P1 แก่น marketplace,BE,Done,"ทำ: ลง/แก้/ลบ/ดูสินค้าของร้านตัวเอง (i18n field + ราคา + รูป URL + สต็อกเริ่มต้น)
+
+Verify: ลงสินค้าแล้ว inventory ถูกสร้าง stock=ที่กรอก"
+Story,P1-T5: inventory decrement (atomic+idempotent),,P1 แก่น marketplace,BE,Done,"ทำ: POST /api/catalog/inventory/decrement: UPDATE…WHERE stock_qty>=qty + เขียน stock_ledger ตาม idempotency_key
+
+Verify: เทสต์ขนานบน stock=1 → สำเร็จ 1 อันเท่านั้น; ยิงซ้ำ key เดิม → ไม่ตัดเบิ้ล"
+Story,P1-T6: public browse/search,,P1 แก่น marketplace,BE,Done,"ทำ: GET /products (q+categoryId+paging, PG full-text บน title), GET /products/{id}
+
+Verify: ค้นหาเจอ, สินค้า banned/draft ไม่โผล่"
+Story,P1-T7: order scaffold + cart,,P1 แก่น marketplace,BE,Done,"ทำ: Boot+Postgres+Flyway · ตะกร้าต่อผู้ซื้อ (เพิ่ม/แก้จำนวน/ลบ)
+
+Verify: เพิ่มของลงตะกร้าแล้วดูได้"
+Story,P1-T8: checkout (mock),,P1 แก่น marketplace,BE,Done,"ทำ: POST /api/orders/checkout: แตกตะกร้าตามร้าน → catalog decrement (idempotency=orderId) → สร้าง order/order_item (paid_mock) → เคลียร์ตะกร้า; ของหมด rollback ทั้งบิล
+
+Verify: checkout สำเร็จ stock ลด; ของหมด → 409 ไม่สร้าง order"
+Story,P1-T9: orders (buyer/seller),,P1 แก่น marketplace,BE,Done,"ทำ: buyer ดูออเดอร์ตัวเอง; seller ดูออเดอร์ร้าน + อัปสถานะ (paid_mock→shipped→done)
+
+Verify: เห็นตรงฝั่ง, อัปสถานะผิดลำดับ → 400"
+Story,P1-T10: gateway + deploy ขยาย,,P1 แก่น marketplace,GW,Done,"ทำ: Kong route /api/catalog,/api/orders; compose เพิ่ม catalog+order+postgres แต่ละตัว
+
+Verify: ยิงผ่าน :8080 ได้ทั้งคู่"
+Story,P1-T11: web — storefront + product,,P1 แก่น marketplace,FE,Done,"ทำ: หน้าหลัก (หมวด+ค้นหา), หน้าสินค้า (รูป/ราคา/สต็อก/ปุ่มใส่ตะกร้า)
+
+Verify: เลือกสินค้า→ใส่ตะกร้าได้"
+Story,P1-T12: web — cart + checkout + my orders,,P1 แก่น marketplace,FE,Done,"ทำ: ตะกร้า, checkout(จำลอง)→หน้ายืนยัน, ออเดอร์ของฉัน
+
+Verify: ครบลูปซื้อ"
+Story,P1-T13: web — seller dashboard,,P1 แก่น marketplace,FE,Done,"ทำ: become-seller, ร้านฉัน, สินค้า CRUD+สต็อก, ออเดอร์ร้าน+อัปสถานะ
+
+Verify: ผู้ขายจัดการได้ครบ"
+Story,P1-T14: i18n + smoke P1,,P1 แก่น marketplace,FE,Done,"ทำ: เพิ่ม key TH/EN ครบ (shop/seller/cart/order); smoke.sh ครบลูป + oversell test
+
+Verify: smoke เขียว, สลับภาษาครบ"
+Epic,P2: แชต real-time (พระเอก),P2 แชต real-time,,,Done,"เป้าหมาย: buyer↔seller คุยสดจากหน้าสินค้า (WebSocket), เก็บประวัติ, รายการห้อง, unread — รากฐานให้ P4 (Hermes) ตอบอัตโนมัติทีหลัง (10 task). ห้อง = ต่อร้าน (1 ห้อง/คู่ buyer–shop), scope Lean core, transport = Raw WebSocket
+
+REST /api/chat (identity จาก X-Auth-User/Role):
+POST /api/chat/conversations · BUYER → in {productId} → 200 {id,shopId,shopName,productId,lastMessageAt} (find-or-create) · err 400,404
+GET /api/chat/conversations · BUYER/SELLER → 200 [{id,shopId,shopName,productId,lastMessage,unread,lastMessageAt}] · err 401
+GET /api/chat/conversations/{id}/messages · participant → ?before=&limit= → 200 [messages] · err 403,404
+POST /api/chat/conversations/{id}/read · participant → 204 · err 403,404
+
+WebSocket /ws/chat (JSON frames, auth ด้วย frame แรก):
+client→ {type:auth,token} (frame แรก) → {type:authed} ; ผิด close 4401
+client→ {type:send,conversationId,body} → persist+push buyer+shop ; ไม่ใช่คู่ close 4403
+→client {type:message,message:{...}} (echo ทั้งสองฝั่ง)
+→client {type:error,detail}"
+Story,P2-T1: chat scaffold + data model,,P2 แชต real-time,BE,Done,"ทำ: Boot+Postgres(chatdb)+Flyway+common+websocket · ตาราง conversation/message · health
+
+Verify: boot + Testcontainers"
+Story,P2-T2: CatalogClient + สร้างห้อง,,P2 แชต real-time,BE,Done,"ทำ: CatalogClient (product→shop, shops/me→shopId) + POST /conversations find-or-create
+
+Verify: ยิงซ้ำ productId เดิม → ห้องเดิม"
+Story,P2-T3: รายการห้อง + unread,,P2 แชต real-time,BE,Done,"ทำ: GET /conversations (buyer by username / seller by shopId) + unread count
+
+Verify: เห็นถูกฝั่ง, unread ถูก"
+Story,P2-T4: ประวัติข้อความ + guard,,P2 แชต real-time,BE,Done,"ทำ: GET /{id}/messages?before=&limit= + participant guard
+
+Verify: คนนอกห้อง → 403"
+Story,P2-T5: mark-read,,P2 แชต real-time,BE,Done,"ทำ: POST /{id}/read (set last_read_at ตามฝั่ง)
+
+Verify: read แล้ว unread = 0"
+Story,P2-T6: WS endpoint + auth + registry,,P2 แชต real-time,BE,Done,"ทำ: /ws/chat TextWebSocketHandler, frame แรก auth (common.JwtVerifier), in-memory registry
+
+Verify: auth ✓ → authed / ผิด → ปิด 4401"
+Story,P2-T7: WS send + delivery,,P2 แชต real-time,BE,Done,"ทำ: {type:send} persist + push ไป buyer+shop (echo), guard ไม่ใช่คู่ → 4403
+
+Verify: 2 client ส่ง→อีกฝั่งได้รับจริง"
+Story,P2-T8: gateway + deploy,,P2 แชต real-time,GW,Done,"ทำ: Kong route /api/chat+/ws/chat (WS upgrade); compose เพิ่ม chat+postgres-chat; run.sh
+
+Verify: ยิงผ่าน :8080 + WS ทะลุ"
+Story,P2-T9: web — chat page,,P2 แชต real-time,FE,Done,"ทำ: ปุ่ม แชตผู้ขาย หน้าสินค้า + หน้า /chat (list+thread+WS send/recv+mark-read)
+
+Verify: คุยสองทางผ่าน Kong"
+Story,P2-T10: web — unread badge + i18n + smoke,,P2 แชต real-time,FE,Done,"ทำ: badge unread ใน header, i18n TH/EN, e2e smoke P2
+
+Verify: badge อัปเดต, สลับภาษา, smoke เขียว"
+Epic,P3: omnichannel social (FB/IG),P3 omnichannel social,,,To Do,"3 ระบบอิสระ แตกเป็น sub-phase, mock external Meta ก่อน (⚠️ blocker: Meta Business verification):
+- P3a Omnichannel inbox (FB Messenger DM → รวมกล่องแชต P2) — เสร็จ 2026-07-01
+- P3b Product sync (catalog → FB/IG Shops)
+- P3c Social login (FB/IG OAuth) — skeleton
+
+P3a internal/REST API:
+GET /webhooks/fb · social · public → Meta webhook verify (echo hub.challenge)
+POST /webhooks/fb · social · Meta sig → รับ event → normalize → chat /internal/inbound
+POST /internal/social/simulate-inbound · social · internal → จำลอง FB inbound
+POST /internal/social/send · social · X-Internal-Key → mock Meta Send + outbound_log
+POST /internal/chat/inbound · chat · X-Internal-Key → find-or-create external conv + persist + broadcast WS
+POST /api/social/connections · social · SELLER → เชื่อม FB Page (mock) ผูก pageId↔shop
+
+P3b API (reuse /api/social):
+POST /api/social/sync · SELLER → ดึง /shops/me/products → mock push → upsert → {synced,syncedAt}
+GET /api/social/sync · SELLER → {count,lastSyncedAt}"
+Story,P3a-T1: scaffold marketplace-social,,P3 omnichannel social,BE,Done,"ทำ: scaffold marketplace-social (:8085, Postgres+Flyway+common) + page_connection + webhook verify (GET challenge)
+
+Verify: boot + test"
+Story,P3a-T2: chat extend external + inbound,,P3 omnichannel social,BE,Done,"ทำ: chat extend conversation/message (channel/external) + POST /internal/chat/inbound (find-or-create external + broadcast WS)
+
+Verify: test"
+Story,P3a-T3: social receive webhook,,P3 omnichannel social,BE,Done,"ทำ: social: receive POST /webhooks/fb → normalize → เรียก chat /inbound + POST /internal/social/simulate-inbound
+
+Verify: test"
+Story,P3a-T4: outbound send (mock Meta),,P3 omnichannel social,BE,Done,"ทำ: seller ตอบในห้อง fb → chat เรียก social /internal/send → mock send + outbound_log
+
+Verify: test"
+Story,P3a-T5: gateway + deploy + smoke,,P3 omnichannel social,GW,Done,"ทำ: Kong route /api/social + /webhooks/fb · compose +social +postgres-social · run.sh build social · smoke step 11
+
+Verify: smoke step 11 เขียว (ทะลุ Kong)"
+Story,P3a-T6: web — channel badge + connect FB,,P3 omnichannel social,FE,Done,"ทำ: web: channel badge + external name ใน /chat + connect FB (mock) + ปุ่ม dev simulate
+
+Verify: seller เห็น FB message + ตอบได้"
+Story,P3b-T1: product sync BE,,P3 omnichannel social,BE,To Do,"ทำ: social: published_product + CatalogClient.listMyProducts (forward identity) + FbCatalog(mock) + POST/GET /api/social/sync
+
+Verify: sync ดึง N (MockWebServer stub) → published_product N + mock pusher ถูกเรียก; re-sync upsert; non-seller 403"
+Story,P3b-T2: product sync FE + smoke,,P3 omnichannel social,FE,To Do,"ทำ: web: ปุ่ม Sync สินค้าไป Facebook + สถานะ + i18n + smoke step 12
+
+Verify: seller sync → GET status = N (ทะลุ Kong)"
+Epic,P4: Hermes AI agent + admin,P4 Hermes AI + admin,,,To Do,"เป้าหมาย: ตอบลูกค้าอัตโนมัติ (เรียกข้อมูลจริง) + เครื่องมือ admin. marketplace-agent รัน Hermes (self-host), ห่อ catalog/order เป็น tool/MCP, guardrail, hook เข้า chat. admin: นาทีทอง (flash-sale), ban (user/ร้าน/สินค้า), จัดการ caption. ⚠️ เคาะโมเดลไทย+งบ LLM ก่อนเริ่ม"
+Epic,P5: จ่ายเงินจริง + รีวิว,P5 ทีหลัง,,,To Do,จ่ายเงินจริง (PromptPay/บัตร) · รีวิว/ดาว · wishlist · ระบบแนะนำสินค้า
