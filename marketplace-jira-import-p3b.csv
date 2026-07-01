@@ -1,7 +1,0 @@
-Issue Type,Summary,Epic Link,Labels,Status,Description
-Story,P3b-T1: product sync BE,P3 omnichannel social,BE,To Do,"ทำ: social: published_product + CatalogClient.listMyProducts (forward identity) + FbCatalog(mock) + POST/GET /api/social/sync
-
-Verify: sync ดึง N (MockWebServer stub) → published_product N + mock pusher ถูกเรียก; re-sync upsert; non-seller 403"
-Story,P3b-T2: product sync FE + smoke,P3 omnichannel social,FE,To Do,"ทำ: web: ปุ่ม Sync สินค้าไป Facebook + สถานะ + i18n + smoke step 12
-
-Verify: seller sync → GET status = N (ทะลุ Kong)"
