@@ -1,7 +1,7 @@
 # SPEC — Omnichannel Marketplace (greenfield, multi-repo)
 
 > **สำหรับ agent ที่ลงมือทำ:** ใช้ superpowers:writing-plans (task ทีละ 2–5 นาที, TDD, commit ถี่). task ใช้ checkbox.
-> เขียนใหม่ทั้งหมด ไม่แตะ lab เดิม. P0–P2 + P3a + P3b = สเปคเต็ม (task + API input/output). P3c/P4/P5 = โครง (ลง API ตอนเริ่มแต่ละเฟส).
+> เขียนใหม่ทั้งหมด ไม่แตะ lab เดิม. P0–P2 + P3a + P3b + P3c = สเปคเต็ม (task + API input/output). P4/P5 = โครง (ลง API ตอนเริ่มแต่ละเฟส).
 
 ## ข้อสรุปที่ยืนยันแล้ว (ผู้ใช้เคาะเอง)
 
@@ -195,7 +195,7 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 **Phase 3 — omnichannel social (FB/IG)** = 3 ระบบอิสระ → แตกเป็น sub-phase (แต่ละอันมี spec+plan+build แยก). ทั้งหมด **mock external Meta ก่อน**, เสียบ Graph จริงตอน Meta Business verification ผ่าน (⚠️ blocker เดิม):
 - **P3a — Omnichannel inbox**: FB Messenger DM → รวมในกล่องแชต P2 *(สเปคเต็มด้านล่าง)*
 - **P3b — Product sync**: catalog → FB/IG Shops *(สเปคเต็มด้านล่าง)*
-- **P3c — Social login**: FB/IG OAuth ใน auth *(skeleton)*
+- **P3c — Social login**: FB OAuth ใน auth *(สเปคเต็มด้านล่าง)*
 
 ### SPEC — P3a: Omnichannel inbox (FB Messenger, 2-way, mock Meta)
 **เคาะแล้ว (brainstorm 2026-06-30):** external contact (conversation +channel +external_id +display_name, **ไม่สร้าง user**) · รวมในกล่องแชต P2 เดิม · **FB Messenger ช่องเดียว 2-way** · social↔chat = **internal REST** (ตัด queue/Kafka)
@@ -255,6 +255,29 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 **แตกงาน (P3b-T1..T2)**
 - **T1 [BE]** social: `published_product` + CatalogClient.listMyProducts (forward identity) + `FbCatalog`(mock) + `POST/GET /api/social/sync` · verify: sync ดึง N (MockWebServer stub catalog) → `published_product` N แถว + mock pusher ถูกเรียก; re-sync = upsert (ไม่ซ้ำ); non-seller → 403
 - **T2 [FE]** web: ปุ่ม "Sync สินค้าไป Facebook" + สถานะ ("sync แล้ว N ชิ้น เมื่อ [เวลา]") + i18n TH/EN · verify: seller กด sync → `GET /api/social/sync` = N (ทะลุ Kong) = **smoke step 12**
+
+### SPEC — P3c: Social login (real FB OAuth)
+**เคาะแล้ว (brainstorm 2026-07-01):** **real FB OAuth** (authorization-code flow จริงผ่าน Graph API) · สร้าง user ใหม่ + ผูกถ้า email ซ้ำ · test ด้วย **mock Graph** (MockWebServer) ไม่ติด Meta · แตะแค่ **auth + web** (route `/api/auth` ผ่าน Kong อยู่แล้ว → ไม่แตะ gateway)
+
+**Flow:** web "Login with Facebook" → FB OAuth dialog → callback(`?code`) → web POST code ให้ auth → auth แลก `code→access_token` (Graph) → ดึงโปรไฟล์ `id,name,email` → find-or-create/link user → issueTokens (JWT+refresh เดิม) → ล็อกอิน
+
+**Data model (auth `app_user`):** +`external_provider_id VARCHAR(64) UNIQUE NULL` (เช่น `facebook:<id>`) · `password_hash` → **nullable** (social user ไม่มีรหัส; password-login กัน null hash)
+
+**API (auth, public)**
+| Method Path | In → Out |
+|---|---|
+| `GET /api/auth/oauth/fb/login-url` | → `{url}` (auth สร้าง FB authorize URL + state) |
+| `POST /api/auth/oauth/fb/callback` `{code, redirectUri}` | แลก token + โปรไฟล์ → find-or-create/link → `{accessToken, expiresIn}` + refresh cookie (เหมือน login) |
+
+**Config (auth yml + compose env):** `fb.app-id`, `fb.app-secret`, `fb.redirect-uri`, `fb.graph-url` (`${FB_GRAPH_URL:https://graph.facebook.com}` — test ชี้ MockWebServer)
+
+**Web:** ปุ่ม "เข้าสู่ระบบด้วย Facebook" (Login) → GET login-url → redirect · route `/oauth/fb/callback` อ่าน `?code` → POST callback → set token → หน้าแรก · i18n TH/EN
+
+**Prereq ใช้จริง:** Meta app (App ID/Secret) + redirect URI ตั้งใน Meta dashboard → ใส่ `.env` · **ไม่มี smoke step** (real OAuth ผ่าน Kong ต้องมี creds) → coverage ด้วย integration test (mock Graph)
+
+**แตกงาน (P3c-T1..T2)**
+- **T1 [BE]** auth: `V3__social.sql` (external_provider_id + password nullable) + `FbOAuthService` + `GraphClient` (RestClient แลก code→token + GET `/me?fields=id,name,email`) + `OAuthController` (2 endpoints) + config `fb.*` + UserRepository `findByExternalProviderId` + reuse `JwtIssuer` · verify: callback → สร้าง user ใหม่ + JWT ถูก; email ซ้ำ → ผูก user เดิม (ไม่สร้างซ้ำ); external_provider_id เดิม → login เดิม; login-url มี app-id + state (MockWebServer graph)
+- **T2 [FE]** web: ปุ่ม Login-with-Facebook + route `/oauth/fb/callback` + `api/auth.ts` (fbLoginUrl/fbCallback) + i18n · compose auth env `FB_*` + `.env.example` · verify: `npm run build`; ปุ่ม redirect FB dialog; callback set token
 
 **Phase 4 — Hermes AI agent + admin** · เป้าหมาย: ตอบลูกค้าอัตโนมัติ (เรียกข้อมูลจริง) + เครื่องมือ admin
 - T: `marketplace-agent` รัน **Hermes** (self-host) · ห่อ catalog/order เป็น **tool/MCP** (สต็อก/ราคา/สถานะออเดอร์) ·
