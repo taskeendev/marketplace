@@ -1,7 +1,7 @@
 # SPEC — Omnichannel Marketplace (greenfield, multi-repo)
 
 > **สำหรับ agent ที่ลงมือทำ:** ใช้ superpowers:writing-plans (task ทีละ 2–5 นาที, TDD, commit ถี่). task ใช้ checkbox.
-> เขียนใหม่ทั้งหมด ไม่แตะ lab เดิม. P0–P2 + P3a = สเปคเต็ม (task + API input/output). P3b/P3c/P4/P5 = โครง (ลง API ตอนเริ่มแต่ละเฟส).
+> เขียนใหม่ทั้งหมด ไม่แตะ lab เดิม. P0–P2 + P3a + P3b = สเปคเต็ม (task + API input/output). P3c/P4/P5 = โครง (ลง API ตอนเริ่มแต่ละเฟส).
 
 ## ข้อสรุปที่ยืนยันแล้ว (ผู้ใช้เคาะเอง)
 
@@ -194,7 +194,7 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 
 **Phase 3 — omnichannel social (FB/IG)** = 3 ระบบอิสระ → แตกเป็น sub-phase (แต่ละอันมี spec+plan+build แยก). ทั้งหมด **mock external Meta ก่อน**, เสียบ Graph จริงตอน Meta Business verification ผ่าน (⚠️ blocker เดิม):
 - **P3a — Omnichannel inbox**: FB Messenger DM → รวมในกล่องแชต P2 *(สเปคเต็มด้านล่าง)*
-- **P3b — Product sync**: catalog → FB/IG Shops *(skeleton — ลงรายละเอียดตอนเริ่ม)*
+- **P3b — Product sync**: catalog → FB/IG Shops *(สเปคเต็มด้านล่าง)*
 - **P3c — Social login**: FB/IG OAuth ใน auth *(skeleton)*
 
 ### SPEC — P3a: Omnichannel inbox (FB Messenger, 2-way, mock Meta)
@@ -234,6 +234,27 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 - **T4 [BE]** outbound: seller ตอบในห้อง fb → chat เรียก social `/internal/send` → mock send + `outbound_log` → test
 - **T5 [GW]** Kong route `/api/social` + `/webhooks/fb` · compose +social +postgres-social · run.sh build social · **smoke step 11**
 - **T6 [FE]** web: channel badge + external name ใน `/chat` + "connect FB (mock)" + ปุ่ม dev simulate
+
+### SPEC — P3b: Product sync (catalog → FB Shops, mock)
+**เคาะแล้ว (brainstorm 2026-07-01):** seller กดปุ่ม **"sync ทั้งหมดไป FB"** (manual) · **social** เป็นเจ้าของ FB catalog sync · mock Meta · scope = push สินค้า **ACTIVE ทั้งหมด**, กดซ้ำ = upsert, ไม่จัดการลบ (Lean) · reuse route `/api/social` + service social เดิม (P3a) → ไม่ต้องแตะ gateway/compose
+
+**Flow:** seller `POST /api/social/sync` → social ดึงสินค้าจาก catalog `GET /shops/me/products` (forward identity) → mock push แต่ละชิ้นขึ้น FB catalog (`FbCatalog` interface + `MockFbCatalog`) → upsert `published_product` → คืน `{synced:N, syncedAt}`
+
+**Data model (social):** `published_product(id, shop_id, product_id, fb_product_id, title, price_baht, synced_at)` UNIQUE(shop_id, product_id)
+
+**API (reuse `/api/social`):**
+| Method Path | Auth | ทำอะไร |
+|---|---|---|
+| `POST /api/social/sync` | SELLER | ดึง `/shops/me/products` → mock push → upsert published_product → `{synced, syncedAt}` |
+| `GET /api/social/sync` | SELLER | สถานะ `{count, lastSyncedAt}` |
+
+**Web:** seller dashboard ปุ่ม "Sync สินค้าไป Facebook" → "sync แล้ว N ชิ้น เมื่อ [เวลา]" · i18n TH/EN
+
+**Testing:** social — sync ดึง N (MockWebServer stub catalog) → published_product N แถว + mock pusher ถูกเรียก · re-sync = upsert (ไม่ซ้ำ) · non-seller 403 · **smoke step 12:** seller sync → GET status = N (ทะลุ Kong)
+
+**แตกงาน (P3b-T1..T2)**
+- **T1 [BE]** social: `published_product` + CatalogClient.listMyProducts (forward identity) + `FbCatalog`(mock) + `POST/GET /api/social/sync` → test
+- **T2 [FE]** web: ปุ่ม "Sync สินค้าไป Facebook" + สถานะ + i18n + **smoke step 12**
 
 **Phase 4 — Hermes AI agent + admin** · เป้าหมาย: ตอบลูกค้าอัตโนมัติ (เรียกข้อมูลจริง) + เครื่องมือ admin
 - T: `marketplace-agent` รัน **Hermes** (self-host) · ห่อ catalog/order เป็น **tool/MCP** (สต็อก/ราคา/สถานะออเดอร์) ·
