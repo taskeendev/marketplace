@@ -5,14 +5,17 @@ Omnichannel multi-seller marketplace — a **greenfield microservices** build in
 > This repo is the **project hub**: architecture, the full [spec](./SPEC.md), the backlog (Issues + Project board), and links to every service repo.
 
 ## 📚 Documentation
-A static docs site (plain HTML/CSS) split by audience — open **[`docs/index.html`](./docs/index.html)**:
+
+### 🌐 **Live site: [taskeendev.github.io/marketplace](https://taskeendev.github.io/marketplace/)**
+
+A static docs site (plain HTML/CSS) split by audience:
 
 | For | Page |
 |---|---|
-| 🛒 Buyers | [Buyer guide](./docs/buyer.html) |
-| 🏪 Sellers | [Seller guide](./docs/seller.html) |
-| ⚙️ Developers | [API reference](./docs/developer.html) — REST + WebSocket, auth, 47 endpoints, error codes, changelog |
-| 🚀 Operators | [Run & operate](./docs/operations.html) — architecture, one-command run, smoke test |
+| 🛒 Buyers | [Buyer guide](https://taskeendev.github.io/marketplace/buyer.html) |
+| 🏪 Sellers | [Seller guide](https://taskeendev.github.io/marketplace/seller.html) |
+| ⚙️ Developers | [API reference](https://taskeendev.github.io/marketplace/developer.html) — REST + WebSocket, auth, 47 endpoints, error codes, changelog |
+| 🚀 Operators | [Run & operate](https://taskeendev.github.io/marketplace/operations.html) — architecture, one-command run, smoke test |
 
 ## Architecture
 
