@@ -1,7 +1,7 @@
 # SPEC — Omnichannel Marketplace (greenfield, multi-repo)
 
 > **สำหรับ agent ที่ลงมือทำ:** ใช้ superpowers:writing-plans (task ทีละ 2–5 นาที, TDD, commit ถี่). task ใช้ checkbox.
-> เขียนใหม่ทั้งหมด ไม่แตะ lab เดิม. P0–P2 + P3a + P3b + P3c = สเปคเต็ม (task + API input/output). P4/P5 = โครง (ลง API ตอนเริ่มแต่ละเฟส).
+> เขียนใหม่ทั้งหมด ไม่แตะ lab เดิม. P0–P2 + P3 + P4a = สเปคเต็ม (task + API input/output). P4b/P5 = โครง (ลง API ตอนเริ่มแต่ละเฟส).
 
 ## ข้อสรุปที่ยืนยันแล้ว (ผู้ใช้เคาะเอง)
 
@@ -279,10 +279,45 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 - **T1 [BE]** auth: `V3__social.sql` (external_provider_id + password nullable) + `FbOAuthService` + `GraphClient` (RestClient แลก code→token + GET `/me?fields=id,name,email`) + `OAuthController` (2 endpoints) + config `fb.*` + UserRepository `findByExternalProviderId` + reuse `JwtIssuer` · verify: callback → สร้าง user ใหม่ + JWT ถูก; email ซ้ำ → ผูก user เดิม (ไม่สร้างซ้ำ); external_provider_id เดิม → login เดิม; login-url มี app-id + state (MockWebServer graph)
 - **T2 [FE]** web: ปุ่ม Login-with-Facebook + route `/oauth/fb/callback` + `api/auth.ts` (fbLoginUrl/fbCallback) + i18n · compose auth env `FB_*` + `.env.example` · verify: `npm run build`; ปุ่ม redirect FB dialog; callback set token
 
-**Phase 4 — Hermes AI agent + admin** · เป้าหมาย: ตอบลูกค้าอัตโนมัติ (เรียกข้อมูลจริง) + เครื่องมือ admin
-- T: `marketplace-agent` รัน **Hermes** (self-host) · ห่อ catalog/order เป็น **tool/MCP** (สต็อก/ราคา/สถานะออเดอร์) ·
-  เลือกโมเดลไทยแข็ง (Claude/Gemini ผ่าน OpenRouter) + guardrail · hook เข้า chat · admin: **นาทีทอง**(flash-sale ตั้งเวลา),
-  **ban**(user/ร้าน/สินค้า), จัดการ caption
+**Phase 4 — Hermes AI agent + admin** = แตกเป็น P4a (agent) + P4b (admin). ทำ **P4a ก่อน**:
+- **P4a — Hermes agent**: ตอบลูกค้าอัตโนมัติในแชต (mock LLM) *(สเปคเต็มด้านล่าง)*
+- **P4b — admin**: นาทีทอง (flash-sale ตั้งเวลา) · ban (user/ร้าน/สินค้า) · จัดการ caption *(skeleton)*
+
+### SPEC — P4a: Hermes AI agent (auto-reply, mock LLM)
+**เคาะแล้ว (brainstorm 2026-07-01):** ทำ P4a ก่อน · **mock LLM** หลัง interface `LlmAgent` (`MockLlmAgent` = จับ intent → เรียก tool → ตอบ templated อิงข้อมูลจริง; เสียบ Claude จริงทีหลัง — ปรัชญาเดียวกับ mock Meta) · **auto-reply + toggle เปิด/ปิดต่อร้าน** + guardrail · **tools = สินค้า/สต็อก/ราคา (catalog) + สถานะออเดอร์ (order)**
+
+**สถาปัตยกรรม:** service ใหม่ `marketplace-agent` (:8086, Boot 3.4 + Postgres `agentdb` + common; template = `marketplace-social`). Reuse internal-key + RestClient.
+
+**Flow (auto-reply):**
+1. ลูกค้าส่งข้อความเข้า chat (web buyer `send` / external `inbound`) → chat หลัง persist ข้อความ**ฝั่งลูกค้า** best-effort เรียก `POST {agent}/internal/agent/incoming {conversationId, shopId, channel, customerName, buyerUsername, body}` *(ข้อความ seller/บอท ไม่ยิง → กัน loop)*
+2. agent เช็ค `agent_config(shop_id).enabled`; ปิด → no-op
+3. `LlmAgent.reply(ctx)` → MockLlmAgent: intent (ราคา/สต็อก, สถานะออเดอร์, อื่นๆ) → เรียก tool → ตอบไทย templated (guardrail: ใช้แต่ tool data; ไม่เจอ → fallback สุภาพ)
+4. โพสต์คำตอบ `POST {chat}/internal/chat/reply {conversationId, body}` → chat persist เป็นข้อความบอท (`senderUsername="hermes"`) + broadcast + ถ้า `channel!=web` relay ออก FB (ใช้ของเดิม)
+
+**Data model (agentdb):** `agent_config(id, shop_id UNIQUE, enabled boolean, created_at)` · `agent_reply_log(id, shop_id, conversation_id, body, created_at)`
+
+**API**
+| Method Path | service | auth | ทำอะไร |
+|---|---|---|---|
+| `POST /internal/chat/reply` | chat | `X-Internal-Key` | โพสต์ข้อความบอท (sender=hermes) + broadcast + outbound relay |
+| `POST /internal/agent/incoming` | agent | `X-Internal-Key` | รับข้อความลูกค้า → MockLLM → ตอบผ่าน chat |
+| `POST /api/agent/config` `{enabled}` | agent | SELLER | เปิด/ปิด Hermes (resolve shop via catalog `/shops/me`) |
+| `GET /api/agent/config` | agent | SELLER | `{enabled}` |
+
+**tools (agent internal):** CatalogClient.search(q)/product(id) → `/api/catalog/products?q=` , `/products/{id}` · OrderClient.ordersOf(username) → `/api/orders/me` forward `X-Auth-User` (web buyer เท่านั้น; external ไม่มี account → ข้าม)
+
+**Web:** seller dashboard toggle "🤖 Hermes — ตอบลูกค้าอัตโนมัติ" (GET/POST `/api/agent/config`) · chat: ข้อความ `senderUsername="hermes"` โชว์ป้าย 🤖 · i18n TH/EN
+
+**gateway/deploy:** Kong route `/api/agent` · compose +agent +postgres-agent · chat ได้ `AGENT_URL` · **smoke step 13** (เปิด Hermes → ลูกค้าถามราคา → บอทตอบราคาจริงในห้อง ผ่าน Kong; ร้านที่ปิด → ไม่ตอบ)
+
+**แตกงาน (P4a-T1..T5)**
+- **T1 [BE]** scaffold `marketplace-agent` (:8086, agentdb, common) + `agent_config` + `POST/GET /api/agent/config` (SELLER) + CatalogClient/OrderClient (read-only tools) → test
+- **T2 [BE]** chat: `POST /internal/chat/reply` (บอท reply + broadcast + outbound relay) + `AgentClient` + ยิง agent เมื่อมีข้อความ**ฝั่งลูกค้า** (best-effort, กัน loop) + `AGENT_URL` → test
+- **T3 [BE]** agent: `POST /internal/agent/incoming` → `LlmAgent` + `MockLlmAgent` (intent→tools→templated, guardrail) → post via ChatClient + `agent_reply_log` → test (MockWebServer stub catalog/order/chat)
+- **T4 [GW/Infra]** Kong route `/api/agent` + compose +agent +postgres-agent + chat `AGENT_URL` + run.sh build agent + **smoke step 13**
+- **T5 [FE]** web: seller Hermes toggle + ป้าย 🤖 บนข้อความบอท + i18n
+
+**Non-goals (P4a):** เรียก LLM/Claude จริง (interface พร้อม, mock ก่อน) · streaming · memory ข้าม turn · admin tools (P4b) · rate-limit คำตอบบอท · multi-step tool planning
 
 **Phase 5 — ทีหลัง** · จ่ายเงินจริง (PromptPay/บัตร) · รีวิว/ดาว · wishlist · ระบบแนะนำสินค้า
 
