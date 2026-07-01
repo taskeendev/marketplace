@@ -144,12 +144,15 @@ debt = [
  ("C2","catalog HeaderAuthFilter สำเนาเอง (ไม่ใช้ common)","🟢","ใช้ common.HeaderAuthFilter","DRY 2 ที่ เสี่ยง drift","Story","P1 แก่น marketplace"),
  ("C3","catalog browse/listMine N+1","🟢","join projection / batch fetch","ช้าตอน list ใหญ่","Story","P1 แก่น marketplace"),
  ("I1","common แค่ mavenLocal (ยัง GitHub Packages)","🟢","publish GitHub Packages + CI auth","build ได้เฉพาะเครื่องที่ install common","Story","P0 รากฐาน"),
- ("SD1","social outbound best-effort (ไม่มี retry/outbox)","🟡","outbox + retry หรือ mark ส่งไม่สำเร็จ","social ล่ม → ข้อความหายเงียบ","Story","P3 omnichannel social"),
+ ("SD1","social outbound best-effort (ไม่มี retry/outbox)","🟡","outbox + retry หรือ mark ส่งไม่สำเร็จ","social ล่ม → ข้อความหายเงียบ","Bug","P3 omnichannel social"),
  ("SD2","webhook ไม่เช็ค X-Hub-Signature-256","🟡","verify HMAC-SHA256 ด้วย app secret","POST webhook ปลอมได้ (security)","Bug","P3 omnichannel social"),
  ("SD6","page token เป็น mock string","🟡","OAuth เก็บ real Page Access Token","ส่ง/รับจริงกับ FB ไม่ได้","Story","P3 omnichannel social"),
  ("SD7","inbound display_name เป็น mock","🟢","ดึงชื่อจริงจาก Graph API","ชื่อลูกค้าเป็น 'FB xxxx'","Story","P3 omnichannel social"),
- ("SD8","webhook ไม่ dedup message id (mid)","🟢","เก็บ mid กัน insert ซ้ำ","Meta ส่งซ้ำ → ข้อความซ้ำ","Story","P3 omnichannel social"),
+ ("SD8","webhook ไม่ dedup message id (mid)","🟢","เก็บ mid กัน insert ซ้ำ","Meta ส่งซ้ำ → ข้อความซ้ำ","Bug","P3 omnichannel social"),
  ("SDc1","FB OAuth state ไม่ validate (CSRF)","🟢","เก็บ state cookie/store + validate ตอน callback","เสี่ยง CSRF บน OAuth callback","Story","P3 omnichannel social"),
+ ("CD1","catalog slug heuristic (ASCII/Thai, blank->shop)","🟢","transliteration ไทย→latin ดีขึ้น หรือให้ผู้ขายกำหนด slug เอง","ร้านชื่อไทยล้วนได้ slug 'shop'/'shop-2'","Story","P1 แก่น marketplace"),
+ ("CMN1","header-trust model (service เชื่อ X-Auth headers)","🟢","mTLS หรือ signed headers ระหว่าง Kong↔service","เข้า service ตรง (bypass Kong) ปลอม identity ได้ (defense-in-depth)","Story","P0 รากฐาน"),
+ ("OD1","order tolerant cart (banned/removed product ยังโชว์)","🟢","เอาออกอัตโนมัติ หรือแจ้ง+บล็อก checkout ชัดเจน","ผู้ซื้อเห็นของที่ซื้อไม่ได้ในตะกร้า (checkout 409 อยู่แล้ว)","Story","P1 แก่น marketplace"),
 ]
 
 rows = []
