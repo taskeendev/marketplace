@@ -253,8 +253,8 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 **Testing:** social — sync ดึง N (MockWebServer stub catalog) → published_product N แถว + mock pusher ถูกเรียก · re-sync = upsert (ไม่ซ้ำ) · non-seller 403 · **smoke step 12:** seller sync → GET status = N (ทะลุ Kong)
 
 **แตกงาน (P3b-T1..T2)**
-- **T1 [BE]** social: `published_product` + CatalogClient.listMyProducts (forward identity) + `FbCatalog`(mock) + `POST/GET /api/social/sync` → test
-- **T2 [FE]** web: ปุ่ม "Sync สินค้าไป Facebook" + สถานะ + i18n + **smoke step 12**
+- **T1 [BE]** social: `published_product` + CatalogClient.listMyProducts (forward identity) + `FbCatalog`(mock) + `POST/GET /api/social/sync` · verify: sync ดึง N (MockWebServer stub catalog) → `published_product` N แถว + mock pusher ถูกเรียก; re-sync = upsert (ไม่ซ้ำ); non-seller → 403
+- **T2 [FE]** web: ปุ่ม "Sync สินค้าไป Facebook" + สถานะ ("sync แล้ว N ชิ้น เมื่อ [เวลา]") + i18n TH/EN · verify: seller กด sync → `GET /api/social/sync` = N (ทะลุ Kong) = **smoke step 12**
 
 **Phase 4 — Hermes AI agent + admin** · เป้าหมาย: ตอบลูกค้าอัตโนมัติ (เรียกข้อมูลจริง) + เครื่องมือ admin
 - T: `marketplace-agent` รัน **Hermes** (self-host) · ห่อ catalog/order เป็น **tool/MCP** (สต็อก/ราคา/สถานะออเดอร์) ·
