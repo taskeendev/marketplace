@@ -4,6 +4,16 @@ Omnichannel multi-seller marketplace — a **greenfield microservices** build in
 
 > This repo is the **project hub**: architecture, the full [spec](./SPEC.md), the backlog (Issues + Project board), and links to every service repo.
 
+## 📚 Documentation
+A static docs site (plain HTML/CSS) split by audience — open **[`docs/index.html`](./docs/index.html)**:
+
+| For | Page |
+|---|---|
+| 🛒 Buyers | [Buyer guide](./docs/buyer.html) |
+| 🏪 Sellers | [Seller guide](./docs/seller.html) |
+| ⚙️ Developers | [API reference](./docs/developer.html) — REST + WebSocket, auth, 47 endpoints, error codes, changelog |
+| 🚀 Operators | [Run & operate](./docs/operations.html) — architecture, one-command run, smoke test |
+
 ## Architecture
 
 ```mermaid

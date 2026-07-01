@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marketplace — Documentation</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="nav">
+  <span class="brand">Marketplace<span>Docs</span></span>
+  <a class="link active" href="index.html">หน้าแรก</a>
+  <a class="link" href="buyer.html">ผู้ซื้อ</a>
+  <a class="link" href="seller.html">ผู้ขาย</a>
+  <a class="link" href="developer.html">Developer (API)</a>
+  <a class="link" href="operations.html">ผู้ดูแลระบบ</a>
+</nav>
+
+<div class="wrap">
+  <span class="pill">เวอร์ชัน P3b · อัปเดต 2026-07-01</span>
+  <h1>Marketplace — เอกสารการใช้งาน</h1>
+  <p class="lead">มาร์เก็ตเพลสแบบ omnichannel (ขายได้ทั้งบนเว็บและ Facebook) สร้างด้วยสถาปัตยกรรม microservices —
+  Java&nbsp;21 / Spring&nbsp;Boot, React, และ Kong gateway</p>
+
+  <p>เอกสารนี้แยกตาม <b>บทบาทของผู้ใช้</b> — เลือกหน้าที่ตรงกับสิ่งที่คุณต้องทำ</p>
+
+  <div class="roles">
+    <a class="role" href="buyer.html">
+      <div class="ico">🛒</div>
+      <h3>ผู้ซื้อ</h3>
+      <p>ค้นหาสินค้า · ใส่ตะกร้า · สั่งซื้อ · แชตกับผู้ขาย</p>
+    </a>
+    <a class="role" href="seller.html">
+      <div class="ico">🏪</div>
+      <h3>ผู้ขาย</h3>
+      <p>เปิดร้าน · จัดการสินค้า/ออเดอร์ · แชตรวมทุกช่อง · เชื่อม Facebook</p>
+    </a>
+    <a class="role" href="developer.html">
+      <div class="ico">⚙️</div>
+      <h3>Developer</h3>
+      <p>REST + WebSocket API · Authentication · ตัวอย่าง Request/Response · Error codes</p>
+    </a>
+    <a class="role" href="operations.html">
+      <div class="ico">🚀</div>
+      <h3>ผู้ดูแลระบบ</h3>
+      <p>รัน stack ด้วยคำสั่งเดียว · สถาปัตยกรรม · smoke test · ตัวแปร config</p>
+    </a>
+  </div>
+
+  <h2>ระบบทำอะไรได้</h2>
+  <ul>
+    <li><b>ผู้ซื้อ:</b> สมัคร/เข้าสู่ระบบ, ค้นหาสินค้า, ตะกร้า, สั่งซื้อ (ตัดสต็อกจริง กัน oversell), ดูออเดอร์, แชตเรียลไทม์กับผู้ขาย</li>
+    <li><b>ผู้ขาย:</b> เปิดร้าน, จัดการสินค้า, จัดการออเดอร์ + สถานะ, กล่องแชตรวม (เว็บ + Facebook), เชื่อมเพจ + sync สินค้าไป FB</li>
+    <li><b>Omnichannel:</b> ข้อความจาก Facebook เด้งเข้ากล่องแชตผู้ขาย และตอบกลับออกไปได้ <span class="muted">(ปัจจุบัน mock Meta — เสียบของจริงเมื่อผ่าน Business verification)</span></li>
+  </ul>
+
+  <h2>เทคโนโลยี</h2>
+  <p>
+    <span class="pill">Java 21</span> <span class="pill">Spring Boot 3.4</span> <span class="pill">Kong Gateway</span>
+    <span class="pill">JWT (HS512)</span> <span class="pill">PostgreSQL + Flyway</span> <span class="pill">WebSocket</span>
+    <span class="pill">React 19 / Vite / TS</span> <span class="pill">Docker Compose</span>
+  </p>
+</div>
+
+<footer>
+  Marketplace · 9 microservices · <a href="https://github.com/taskeendev/marketplace">github.com/taskeendev/marketplace</a>
+</footer>
+</body>
+</html>
