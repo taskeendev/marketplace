@@ -339,7 +339,7 @@ Story,[debt] I1: common แค่ mavenLocal (ยัง GitHub Packages),,P0 ร
 | 2 | เครื่องสะอาด (ลบ ~/.m2 ทิ้ง / ไม่มี mavenLocal) build repo ที่ depend common | build ผ่าน + log บอก resolve common จาก GitHub Packages | build fail หา common ไม่เจอ |
 | 3 | รัน CI pipeline ของ repo ที่ depend common (⚠️ ต้องรันบน runner จริง ไม่ใช่แค่ในเครื่อง) | job เขียว resolve จาก GitHub Packages ด้วย auth ที่ตั้งไว้ | job แดง 401/403 หรือ dependency not found |
 | 4 | ลอง build ใน CI โดยจงใจไม่ใส่ credential | fail แบบชัดเจนว่า auth ไม่ผ่าน (พิสูจน์ว่าดึงจาก remote จริง ไม่ใช่ mavenLocal) | build ผ่านทั้งที่ไม่มี auth (แปลว่ายังใช้ cache/mavenLocal อยู่) |"
-Story,[debt] SD1: social outbound best-effort (ไม่มี retry/outbox),,P3 omnichannel social,tech-debt bug,To Do,"🔧 **social · BE** · 🟡 medium
+Story,[debt] SD1: social outbound best-effort (ไม่มี retry/outbox),,P3 omnichannel social,tech-debt bug,Done,"🔧 **social · BE** · 🟡 medium
 
 **ปัญหา (อธิบายง่ายๆ):** ตอนระบบส่งข้อความออกไปหา Facebook/โซเชียล มันลองส่งแค่ครั้งเดียว (best-effort) ถ้าส่งไม่สำเร็จก็ปล่อยเลย ไม่ลองใหม่และไม่จดบันทึกไว้ ถ้าฝั่งโซเชียลล่มหรือมีปัญหาชั่วคราว ข้อความนั้นจะหายเงียบ ไม่มีใครรู้ว่ามันไม่ถึงปลายทาง.
 
@@ -353,7 +353,7 @@ Story,[debt] SD1: social outbound best-effort (ไม่มี retry/outbox),,P3
 | 2 | จำลองฝั่งโซเชียลล่มทั้งหมด (retry แล้วก็ยังส่งไม่ได้) | มี record ค้างใน outbox status=pending/failed, นับข้อความหายเงียบ = 0 | ไม่มี record เลย ข้อความหายไปเฉยๆ |
 | 3 | หลังโซเชียลกลับมาปกติ ให้ retry ทำงานอีกรอบ | record ที่ค้าง status เปลี่ยนเป็น sent อัตโนมัติ | record ยังค้างตลอด ไม่ถูกส่งซ้ำ |
 | 4 | ยิงส่ง 100 ข้อความรวด โดยแกล้งให้ล้มสุ่มๆ (คำเตือน: ต้องรัน integration/e2e กับตัว retry จริง) | สุดท้ายทุกข้อความมี status=sent, จำนวนข้อความหายเงียบ = 0 | มีบางข้อความค้างหรือหายโดยไม่มี log |"
-Story,[debt] SD2: webhook ไม่เช็ค X-Hub-Signature-256,,P3 omnichannel social,tech-debt bug,To Do,"🔧 **social · BE (security)** · 🟡 medium
+Story,[debt] SD2: webhook ไม่เช็ค X-Hub-Signature-256,,P3 omnichannel social,tech-debt bug,Done,"🔧 **social · BE (security)** · 🟡 medium
 
 **ปัญหา (อธิบายง่ายๆ):** Facebook ยิง event เข้ามาที่ webhook ของเรา แต่ตอนนี้เรารับทุก request ที่เข้ามาโดยไม่เช็คว่ามาจาก Facebook จริงหรือเปล่า ทำให้ใครก็ได้ยิง POST ปลอมเข้ามาแล้วเราบันทึกเป็นข้อความจริง
 
@@ -393,7 +393,7 @@ Story,[debt] SD7: inbound display_name เป็น mock,,P3 omnichannel social,
 | 1 | ยิง inbound เข้ามา 1 ข้อความ โดย Graph API (mock) คืนชื่อ ""สมชาย ใจดี"" | conversation.display_name = ""สมชาย ใจดี"" | ยังเป็น ""FB 123456..."" |
 | 2 | ยิง inbound จากลูกค้า 3 คน แล้วเช็ค display_name ทุกห้อง | ไม่มีห้องไหน display_name ขึ้นต้นด้วย ""FB "" (ครบทั้ง 3 ห้องเป็นชื่อจริง) | มีอย่างน้อย 1 ห้องขึ้นต้น ""FB "" |
 | 3 | จำลอง Graph API (mock) ตอบ error / ไม่คืนชื่อ | service ไม่ crash + fallback เป็น ""FB <id>"" ตามเดิม | service พัง (500) หรือ display_name ว่างเปล่า |"
-Story,[debt] SD8: webhook ไม่ dedup message id (mid),,P3 omnichannel social,tech-debt bug,To Do,"🔧 **social · BE** · 🟢 low
+Story,[debt] SD8: webhook ไม่ dedup message id (mid),,P3 omnichannel social,tech-debt bug,Done,"🔧 **social · BE** · 🟢 low
 
 **ปัญหา (อธิบายง่ายๆ):** Meta (Facebook) ยิง webhook เข้ามาบอกว่ามีข้อความใหม่ แต่บางครั้งมันยิงเรื่องเดิมซ้ำหลายรอบ (event เดียวกัน คือ mid เดียวกัน) ตอนนี้เราบันทึกลง DB ทุกครั้งที่ยิงมา เลยได้ข้อความซ้ำโผล่ในแชท.
 
