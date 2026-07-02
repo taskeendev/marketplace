@@ -164,11 +164,15 @@ for epic_name, summary, status, desc in epics:
         s_sum, label, s_status, scope, verify = st
         d = f"ทำ: {scope}\n\nVerify: {verify}"
         rows.append(["Story", s_sum, "", epic_name, label, s_status, d])
+# junior-friendly acceptance tables (problem/fix/success-fail) live in debt_bodies.json — edit there, keep in sync with JIRA
+BODIES = __import__("json").load(open("/Users/taskeen/marketplace/debt_bodies.json", encoding="utf-8"))
+SEVNAME = {"🟡": "medium", "🟢": "low", "🔴": "high"}
 for did, dtitle, dsev, dsvc, dfix, dimp, dkpi, dtype, depic in debt:
     # JIRA project MAR ไม่มี issue type Bug -> ใช้ Story + label "bug" (ตรงกับการ์ดจริง MAR-54..71)
     labels = "tech-debt bug" if dtype == "Bug" else "tech-debt"
-    rows.append(["Story", f"[debt] {did}: {dtitle}", "", depic, labels, "To Do",
-                 f"[{dsvc}] {dtitle}. วิธีแก้: {dfix}. ถ้าไม่แก้: {dimp} ({dsev}). 🎯 KPI: {dkpi}"])
+    body = BODIES.get(did) or f"**ปัญหา:** {dtitle}. **วิธีแก้:** {dfix}. 🎯 KPI: {dkpi}"
+    desc = f"🔧 **{dsvc}** · {dsev} {SEVNAME.get(dsev, '')}\n\n{body}"
+    rows.append(["Story", f"[debt] {did}: {dtitle}", "", depic, labels, "To Do", desc])
 
 with open(OUT, "w", newline="", encoding="utf-8") as f:
     w = csv.writer(f)
