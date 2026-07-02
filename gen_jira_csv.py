@@ -127,7 +127,7 @@ stories = {
  "P4 Hermes AI + admin": [
   ("P4a-T1 agent: scaffold + config + tools","BE","Done","scaffold marketplace-agent (:8086, agentdb, common) + agent_config + POST/GET /api/agent/config (SELLER toggle) + CatalogClient/OrderClient read-only tools","boot+test; toggle เปิด/ปิดต่อร้าน"),
   ("P4a-T2 chat: /internal/chat/reply + notify agent","BE","Done","chat: POST /internal/chat/reply (บอท reply sender=hermes + broadcast + outbound relay) + AgentClient + ยิง agent เมื่อมีข้อความฝั่งลูกค้า (best-effort, กัน loop) + AGENT_URL","reply post+broadcast; customer msg → notify; seller/bot → ไม่ยิง"),
-  ("P4a-T3 agent: incoming + MockLlmAgent","BE","To Do","agent: POST /internal/agent/incoming → LlmAgent + MockLlmAgent (intent→tool→templated, guardrail) → post via chat + agent_reply_log","MockWebServer stub catalog/order/chat: ตอบอิง tool data; disabled shop → no-op"),
+  ("P4a-T3 agent: incoming + MockLlmAgent","BE","Done","agent: POST /internal/agent/incoming → LlmAgent + MockLlmAgent (intent→tool→templated, guardrail) → post via chat + agent_reply_log","MockWebServer stub catalog/order/chat: ตอบอิง tool data; disabled shop → no-op"),
   ("P4a-T4 gateway/deploy + smoke step 13","GW","To Do","Kong route /api/agent + compose +agent+postgres-agent + chat AGENT_URL + run.sh build agent + smoke step 13","enable Hermes → ลูกค้าถามราคา → บอทตอบราคาจริง ผ่าน Kong; ปิด → ไม่ตอบ"),
   ("P4a-T5 web: Hermes toggle + bot badge","FE","To Do","web: seller dashboard 🤖 Hermes on/off toggle + ป้าย 🤖 บนข้อความ hermes + i18n","npm run build; toggle ทำงาน; บอทมีป้าย"),
  ],
