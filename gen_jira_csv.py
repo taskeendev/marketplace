@@ -167,12 +167,14 @@ for epic_name, summary, status, desc in epics:
 # junior-friendly acceptance tables (problem/fix/success-fail) live in debt_bodies.json — edit there, keep in sync with JIRA
 BODIES = __import__("json").load(open("/Users/taskeen/marketplace/debt_bodies.json", encoding="utf-8"))
 SEVNAME = {"🟡": "medium", "🟢": "low", "🔴": "high"}
+DEBT_DONE = {"C1", "C2"}  # cleared debt (PR merged, KPI green) — flip here when each debt task lands
 for did, dtitle, dsev, dsvc, dfix, dimp, dkpi, dtype, depic in debt:
     # JIRA project MAR ไม่มี issue type Bug -> ใช้ Story + label "bug" (ตรงกับการ์ดจริง MAR-54..71)
     labels = "tech-debt bug" if dtype == "Bug" else "tech-debt"
     body = BODIES.get(did) or f"**ปัญหา:** {dtitle}. **วิธีแก้:** {dfix}. 🎯 KPI: {dkpi}"
     desc = f"🔧 **{dsvc}** · {dsev} {SEVNAME.get(dsev, '')}\n\n{body}"
-    rows.append(["Story", f"[debt] {did}: {dtitle}", "", depic, labels, "To Do", desc])
+    rows.append(["Story", f"[debt] {did}: {dtitle}", "", depic, labels,
+                 "Done" if did in DEBT_DONE else "To Do", desc])
 
 with open(OUT, "w", newline="", encoding="utf-8") as f:
     w = csv.writer(f)
