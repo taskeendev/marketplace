@@ -133,26 +133,27 @@ stories = {
  ],
 }
 
-# tech-debt filed as individual tasks (mirrors GitHub issues #54-69): (id, title, sev, fix, impact, issue_type, epic_link)
+# tech-debt filed as individual tasks: (id, title, sev, service, fix, impact, kpi, issue_type, epic_link)
+# kpi = ONE runnable check + concrete expected value ([e2e]/[infra]/[partial] = not a plain unit test)
 debt = [
- ("D1","seller resolve shop ไม่ cache (ยิง catalog ทุก request)","🟡","cache shop_id (TTL/Caffeine) หรือใส่ JWT claim","seller ทุก req ยิง catalog +1 → latency+coupling","Story","P2 แชต real-time"),
- ("D4","WS session registry in-memory ตัวเดียว","🟡","Redis pub/sub fan-out ข้าม node","chat รันได้แค่ 1 instance, ไม่ HA","Story","P2 แชต real-time"),
- ("D5","WS delivery ใช้ synchronized(session)","🟢","ConcurrentWebSocketSessionDecorator","ไม่ optimal ตอน concurrency สูง","Story","P2 แชต real-time"),
- ("D6","web WS ไม่มี auto-reconnect/token-refresh","🟢","reconnect + re-auth token ใหม่ + heartbeat","token หมด/เน็ตหลุด → ต้อง refresh หน้า","Story","P2 แชต real-time"),
- ("O1","checkout decrement-then-create → stock leak","🟡","reconcile job keyed idempotencyKey หรือ outbox/saga","crash หลัง decrement → สต็อกรั่ว","Bug","P1 แก่น marketplace"),
- ("C1","inventory concurrent same idempotencyKey → 500","🟡","catch unique-violation → idempotent no-op / upsert","2 call key เดียวพร้อมกัน → ตัวแพ้ 500","Bug","P1 แก่น marketplace"),
- ("C2","catalog HeaderAuthFilter สำเนาเอง (ไม่ใช้ common)","🟢","ใช้ common.HeaderAuthFilter","DRY 2 ที่ เสี่ยง drift","Story","P1 แก่น marketplace"),
- ("C3","catalog browse/listMine N+1","🟢","join projection / batch fetch","ช้าตอน list ใหญ่","Story","P1 แก่น marketplace"),
- ("I1","common แค่ mavenLocal (ยัง GitHub Packages)","🟢","publish GitHub Packages + CI auth","build ได้เฉพาะเครื่องที่ install common","Story","P0 รากฐาน"),
- ("SD1","social outbound best-effort (ไม่มี retry/outbox)","🟡","outbox + retry หรือ mark ส่งไม่สำเร็จ","social ล่ม → ข้อความหายเงียบ","Bug","P3 omnichannel social"),
- ("SD2","webhook ไม่เช็ค X-Hub-Signature-256","🟡","verify HMAC-SHA256 ด้วย app secret","POST webhook ปลอมได้ (security)","Bug","P3 omnichannel social"),
- ("SD6","page token เป็น mock string","🟡","OAuth เก็บ real Page Access Token","ส่ง/รับจริงกับ FB ไม่ได้","Story","P3 omnichannel social"),
- ("SD7","inbound display_name เป็น mock","🟢","ดึงชื่อจริงจาก Graph API","ชื่อลูกค้าเป็น 'FB xxxx'","Story","P3 omnichannel social"),
- ("SD8","webhook ไม่ dedup message id (mid)","🟢","เก็บ mid กัน insert ซ้ำ","Meta ส่งซ้ำ → ข้อความซ้ำ","Bug","P3 omnichannel social"),
- ("SDc1","FB OAuth state ไม่ validate (CSRF)","🟢","เก็บ state cookie/store + validate ตอน callback","เสี่ยง CSRF บน OAuth callback","Story","P3 omnichannel social"),
- ("CD1","catalog slug heuristic (ASCII/Thai, blank->shop)","🟢","transliteration ไทย→latin ดีขึ้น หรือให้ผู้ขายกำหนด slug เอง","ร้านชื่อไทยล้วนได้ slug 'shop'/'shop-2'","Story","P1 แก่น marketplace"),
- ("CMN1","header-trust model (service เชื่อ X-Auth headers)","🟢","mTLS หรือ signed headers ระหว่าง Kong↔service","เข้า service ตรง (bypass Kong) ปลอม identity ได้ (defense-in-depth)","Story","P0 รากฐาน"),
- ("OD1","order tolerant cart (banned/removed product ยังโชว์)","🟢","เอาออกอัตโนมัติ หรือแจ้ง+บล็อก checkout ชัดเจน","ผู้ซื้อเห็นของที่ซื้อไม่ได้ในตะกร้า (checkout 409 อยู่แล้ว)","Story","P1 แก่น marketplace"),
+ ("D1","seller resolve shop ไม่ cache (ยิง catalog ทุก request)","🟡","chat · BE","cache shop_id (TTL/Caffeine) หรือใส่ JWT claim","seller ทุก req ยิง catalog +1 → latency+coupling","GET /shops/me ไป catalog ต่อ 10 requests ของ seller คนเดียว = 1 (หลัง cache; นับด้วย MockWebServer)","Story","P2 แชต real-time"),
+ ("D4","WS session registry in-memory ตัวเดียว","🟡","chat · BE","Redis pub/sub fan-out ข้าม node","chat รันได้แค่ 1 instance, ไม่ HA","[e2e/infra: Redis] chat 2 instance หลัง LB → client คนละ instance ส่งข้อความถึงกันข้าม instance","Story","P2 แชต real-time"),
+ ("D5","WS delivery ใช้ synchronized(session)","🟢","chat · BE","ConcurrentWebSocketSessionDecorator","ไม่ optimal ตอน concurrency สูง","100 concurrent send ไป session เดียว → 0 IllegalStateException + ทุก frame ครบ","Story","P2 แชต real-time"),
+ ("D6","web WS ไม่มี auto-reconnect/token-refresh","🟢","web · FE","reconnect + re-auth token ใหม่ + heartbeat","token หมด/เน็ตหลุด → ต้อง refresh หน้า","[e2e] drop WS จาก server → client reconnect+re-auth เองใน ~5s + รับข้อความใหม่ได้ (ไม่ต้อง refresh)","Story","P2 แชต real-time"),
+ ("O1","checkout decrement-then-create → stock leak","🟡","order · BE","reconcile job keyed idempotencyKey หรือ outbox/saga","crash หลัง decrement → สต็อกรั่ว","mock orders.save throw หลัง catalog.decrement → catalog stock −qty + orders=0 (repro); หลัง reconcile → catalog stock กลับเท่าเดิม + stock_ledger ที่ idempotencyKey ไม่มี order ผูก = 0","Bug","P1 แก่น marketplace"),
+ ("C1","inventory concurrent same idempotencyKey → 500","🟡","catalog · BE","catch unique-violation → idempotent no-op / upsert","2 call key เดียวพร้อมกัน → ตัวแพ้ 500","ยิงขนาน 2 request idempotencyKey เดียวกัน → 0 responses = 5xx + stock_ledger 1 แถวต่อ key","Bug","P1 แก่น marketplace"),
+ ("C2","catalog HeaderAuthFilter สำเนาเอง (ไม่ใช้ common)","🟢","catalog · BE","ใช้ common.HeaderAuthFilter","DRY 2 ที่ เสี่ยง drift","HeaderAuthFilter สำเนาใน catalog = 0 คลาส (ใช้ common) + auth/role tests เดิมเขียว","Story","P1 แก่น marketplace"),
+ ("C3","catalog browse/listMine N+1","🟢","catalog · BE","join projection / batch fetch","ช้าตอน list ใหญ่","query count ต่อ browse 20 สินค้า ≤ 3 (Hibernate statistics; เดิม ~21)","Story","P1 แก่น marketplace"),
+ ("I1","common แค่ mavenLocal (ยัง GitHub Packages)","🟢","common · Infra","publish GitHub Packages + CI auth","build ได้เฉพาะเครื่องที่ install common","build repo ที่ depend common บนเครื่องสะอาด (ไม่มี mavenLocal) ผ่าน — resolve จาก GitHub Packages ใน CI","Story","P0 รากฐาน"),
+ ("SD1","social outbound best-effort (ไม่มี retry/outbox)","🟡","social · BE","outbox + retry หรือ mark ส่งไม่สำเร็จ","social ล่ม → ข้อความหายเงียบ","send ล้ม 2 ครั้งแรก สำเร็จครั้งที่ 3 → outbound_log status=sent + 0 ข้อความหายเงียบ","Bug","P3 omnichannel social"),
+ ("SD2","webhook ไม่เช็ค X-Hub-Signature-256","🟡","social · BE (security)","verify HMAC-SHA256 ด้วย app secret","POST webhook ปลอมได้ (security)","webhook signature ผิด → status ≠ 2xx + 0 message persisted; ถูก (HMAC app secret) → 200 + persisted","Bug","P3 omnichannel social"),
+ ("SD6","page token เป็น mock string","🟡","social · BE","OAuth เก็บ real Page Access Token","ส่ง/รับจริงกับ FB ไม่ได้","[partial จน Meta จริง] page_connection เก็บ token จาก OAuth exchange (mock Graph) ไม่ใช่ literal 'mock'","Story","P3 omnichannel social"),
+ ("SD7","inbound display_name เป็น mock","🟢","social · BE","ดึงชื่อจริงจาก Graph API","ชื่อลูกค้าเป็น 'FB xxxx'","inbound → ดึงชื่อจาก Graph (mock) → conversation.display_name = ชื่อจริง ไม่ใช่ 'FB <id>'","Story","P3 omnichannel social"),
+ ("SD8","webhook ไม่ dedup message id (mid)","🟢","social · BE","เก็บ mid กัน insert ซ้ำ","Meta ส่งซ้ำ → ข้อความซ้ำ","POST webhook mid เดียวกัน 2 ครั้ง → persist 1 ข้อความ (count=1)","Bug","P3 omnichannel social"),
+ ("SDc1","FB OAuth state ไม่ validate (CSRF)","🟢","auth · BE (security)","เก็บ state cookie/store + validate ตอน callback","เสี่ยง CSRF บน OAuth callback","callback state ไม่ตรง/หมดอายุ → ไม่ออก token (400/401); state ถูก → สำเร็จ","Story","P3 omnichannel social"),
+ ("CD1","catalog slug heuristic (ASCII/Thai, blank->shop)","🟢","catalog · BE","transliteration ไทย→latin ดีขึ้น หรือให้ผู้ขายกำหนด slug เอง","ร้านชื่อไทยล้วนได้ slug 'shop'/'shop-2'","2 ร้านชื่อไทยล้วน → slug ต่างกันและอ่านออก (ไม่ใช่ shop/shop-2) หรือ seller ตั้ง slug เองได้","Story","P1 แก่น marketplace"),
+ ("CMN1","header-trust model (service เชื่อ X-Auth headers)","🟢","gateway+all · Infra (security)","mTLS หรือ signed headers ระหว่าง Kong↔service","เข้า service ตรง (bypass Kong) ปลอม identity ได้ (defense-in-depth)","ยิง service ตรง (bypass Kong) ด้วย X-Auth-* ปลอม → 401/403 (mTLS/signed headers) — ต่อยอด MAR-72","Story","P0 รากฐาน"),
+ ("OD1","order tolerant cart (banned/removed product ยังโชว์)","🟢","order · BE","เอาออกอัตโนมัติ หรือแจ้ง+บล็อก checkout ชัดเจน","ผู้ซื้อเห็นของที่ซื้อไม่ได้ในตะกร้า (checkout 409 อยู่แล้ว)","สินค้า banned/ถูกลบในตะกร้า → checkout → 409 ระบุ item ที่มีปัญหา (ไม่ 500/ไม่เงียบ) + เอาออกจากตะกร้าได้","Story","P1 แก่น marketplace"),
 ]
 
 rows = []
@@ -163,11 +164,11 @@ for epic_name, summary, status, desc in epics:
         s_sum, label, s_status, scope, verify = st
         d = f"ทำ: {scope}\n\nVerify: {verify}"
         rows.append(["Story", s_sum, "", epic_name, label, s_status, d])
-for did, dtitle, dsev, dfix, dimp, dtype, depic in debt:
+for did, dtitle, dsev, dsvc, dfix, dimp, dkpi, dtype, depic in debt:
     # JIRA project MAR ไม่มี issue type Bug -> ใช้ Story + label "bug" (ตรงกับการ์ดจริง MAR-54..71)
     labels = "tech-debt bug" if dtype == "Bug" else "tech-debt"
     rows.append(["Story", f"[debt] {did}: {dtitle}", "", depic, labels, "To Do",
-                 f"{dtitle}. วิธีแก้: {dfix}. ถ้าไม่แก้: {dimp} ({dsev})"])
+                 f"[{dsvc}] {dtitle}. วิธีแก้: {dfix}. ถ้าไม่แก้: {dimp} ({dsev}). 🎯 KPI: {dkpi}"])
 
 with open(OUT, "w", newline="", encoding="utf-8") as f:
     w = csv.writer(f)
