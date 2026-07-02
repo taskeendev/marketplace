@@ -164,7 +164,9 @@ for epic_name, summary, status, desc in epics:
         d = f"ทำ: {scope}\n\nVerify: {verify}"
         rows.append(["Story", s_sum, "", epic_name, label, s_status, d])
 for did, dtitle, dsev, dfix, dimp, dtype, depic in debt:
-    rows.append([dtype, f"[debt] {did}: {dtitle}", "", depic, "tech-debt", "To Do",
+    # JIRA project MAR ไม่มี issue type Bug -> ใช้ Story + label "bug" (ตรงกับการ์ดจริง MAR-54..71)
+    labels = "tech-debt bug" if dtype == "Bug" else "tech-debt"
+    rows.append(["Story", f"[debt] {did}: {dtitle}", "", depic, labels, "To Do",
                  f"{dtitle}. วิธีแก้: {dfix}. ถ้าไม่แก้: {dimp} ({dsev})"])
 
 with open(OUT, "w", newline="", encoding="utf-8") as f:
