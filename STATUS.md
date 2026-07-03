@@ -9,7 +9,8 @@
 - คั่น: T5 (web Hermes toggle + 🤖 badge) · แล้วค่อย spec-sync drift/quality อื่นๆ
 
 ## ค้างอยู่ / จำไว้ (จาก spec audit 2026-07-02)
-- ✅ auth bypass (Kong strip X-Auth-*) แก้แล้ว = MAR-72 (gateway PR#6, verified live) · ✅ ordering (notify async หลัง broadcast) แก้แล้วใน T3
+- ✅ **tech-debt เคลียร์ครบ 13/13 (2026-07-03)**: C1 C2 SD1 SD2 SD8 D1 D5 OD1 SDc1 C3 CD1 O1 + MAR-74 (Origin allowlist) — ทุกใบมีเทสตาม KPI + PR merged + MAR-xx Done. เหลือ debt ที่**เลื่อนโดยตั้งใจ**: D4/I1/CMN1 (เฟส Ops) · D6 (e2e FE) · SD6/SD7 (ติด Meta จริง)
+- ✅ auth bypass MAR-72 (verified live) · ✅ ordering fix ใน T3
 - **spec-sync รอบถัดไป (ยังไม่ทำ):** drift/quality in-place — logout(cookie/204) · search=ILIKE ไม่ใช่ full-text · shops/{slug} products ว่าง · cart error contract · simulate-inbound เปิด public (ควร gate SELLER)
 - เฟส **Ops (สุดท้าย, เคาะแล้ว — ห้ามดึงมาก่อน)**: deploy จริง + CI/CD + Prometheus/Grafana — ยังไม่เขียนลง SPEC.md เป็นเฟส · ขยาย P5 (cancel/refund/address/รูป upload)
 - รายการเต็ม audit: workflow `spec-vs-reality-audit` (กลุ่ม A แก้ SPEC เดิม · B เติมก่อน build · C เฟสใหม่)
