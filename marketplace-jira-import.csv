@@ -449,7 +449,7 @@ Story,[debt] CMN1: header-trust model (service เชื่อ X-Auth headers),,
 | 2 | ยิงตรงเข้า service (ข้าม Kong) พร้อม `X-Auth-Role: admin` ปลอม แล้วเรียก endpoint admin | โดนปฏิเสธ 401/403 | ทำ action admin สำเร็จ |
 | 3 | ยิง request ปกติผ่าน Kong ด้วย token ที่ถูกต้อง | ผ่านได้ตามปกติ ตอบ 200 | โดนบล็อกทั้งที่ควรผ่าน (regression) |
 | 4 | (ต้องทดสอบระดับ infra/e2e) ทุก service ในระบบเปิดใช้ mTLS/signed headers ครบ ไม่มี service ไหนหลุด | ทุก service ปฏิเสธ header ที่ไม่ได้เซ็นจาก Kong | มี service อย่างน้อย 1 ตัวยังเชื่อ header ดิบ |"
-Story,[debt] OD1: order tolerant cart (banned/removed product ยังโชว์),,P1 แก่น marketplace,tech-debt,To Do,"🔧 **order · BE** · 🟢 low
+Story,[debt] OD1: order tolerant cart (banned/removed product ยังโชว์),,P1 แก่น marketplace,tech-debt,Done,"🔧 **order · BE** · 🟢 low
 
 **ปัญหา (อธิบายง่ายๆ):** ของที่ถูกหยิบใส่ตะกร้าไว้ก่อนแล้ว ถ้าทีหลังผู้ขายโดนแบนหรือสินค้าถูกลบ ตะกร้าก็ยังโชว์ของชิ้นนั้นอยู่ ผู้ซื้อกด checkout แล้วไปต่อไม่ได้ แต่ระบบไม่บอกชัดว่าชิ้นไหนมีปัญหา และเอาออกจากตะกร้าไม่ได้ — เหมือนของค้างตะกร้าที่แกะไม่ออก.
 
