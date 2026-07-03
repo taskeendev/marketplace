@@ -311,7 +311,7 @@ Story,[debt] C2: catalog HeaderAuthFilter สำเนาเอง (ไม่ใ
 | 3 | รัน auth/role test suite เดิมของ catalog | เขียวทุก test (fail = 0) | มี test แดงตั้งแต่ 1 ขึ้นไป |
 | 4 | ยิง request มี header user+role ถูกต้อง | ตอบ 200 และอ่าน role ได้ตรง | 401/500 หรืออ่าน role ผิด |
 | 5 | ยิง request ที่ไม่มี header auth | ถูกปฏิเสธ 401/403 เหมือนพฤติกรรม common | หลุดเข้าถึง endpoint ได้ |"
-Story,[debt] C3: catalog browse/listMine N+1,,P1 แก่น marketplace,tech-debt,To Do,"🔧 **catalog · BE** · 🟢 low
+Story,[debt] C3: catalog browse/listMine N+1,,P1 แก่น marketplace,tech-debt,Done,"🔧 **catalog · BE** · 🟢 low
 
 **ปัญหา (อธิบายง่ายๆ):** เวลาโหลดรายการสินค้า 20 ชิ้น โค้ดยิง query 1 ครั้งเพื่อดึงลิสต์ แล้วยิงเพิ่มอีกทีละชิ้นเพื่อดึงข้อมูลย่อย (รูป/หมวด/ผู้ขาย) รวมกลายเป็น ~21 query — ยิ่งสินค้าเยอะยิ่งช้า (เรียกอาการนี้ว่า N+1).
 
@@ -421,7 +421,7 @@ Story,[debt] SDc1: FB OAuth state ไม่ validate (CSRF),,P3 omnichannel soci
 | 3 | ใช้ `state` ที่ถูกต้องแต่หมดอายุแล้ว (รอเกินเวลา TTL) | ตอบ 400/401 + ไม่ออก token | ยังออก token ได้ |
 | 4 | ล็อกอินปกติ: `state` ตรง + ยังไม่หมดอายุ | สำเร็จ + ออก token 1 ใบ | ถูกปฏิเสธทั้งที่ควรผ่าน |
 | 5 | ใช้ `state` เดิมซ้ำครั้งที่ 2 (ควรใช้ได้ครั้งเดียว) | ครั้งที่ 2 ถูกปฏิเสธ 400/401 | ใช้ซ้ำได้เรื่อยๆ |"
-Story,"[debt] CD1: catalog slug heuristic (ASCII/Thai, blank->shop)",,P1 แก่น marketplace,tech-debt,To Do,"🔧 **catalog · BE** · 🟢 low
+Story,"[debt] CD1: catalog slug heuristic (ASCII/Thai, blank->shop)",,P1 แก่น marketplace,tech-debt,Done,"🔧 **catalog · BE** · 🟢 low
 
 **ปัญหา (อธิบายง่ายๆ):** ตอนนี้ระบบสร้าง ""slug"" (ชื่อร้านที่ไปโผล่บน URL เช่น /shop/xxx) จากชื่อร้าน แต่โค้ดรองรับแค่ตัวอังกฤษ พอเจอชื่อร้านเป็นภาษาไทยล้วนมันแปลงไม่ได้ เลยตั้งให้เป็นคำว่า ""shop"" ทุกร้าน ร้านที่ 2 ก็ได้ ""shop-2"" ไปเรื่อยๆ อ่านไม่รู้เรื่องว่าร้านอะไร
 
