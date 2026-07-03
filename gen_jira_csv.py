@@ -167,7 +167,7 @@ for epic_name, summary, status, desc in epics:
 # junior-friendly acceptance tables (problem/fix/success-fail) live in debt_bodies.json — edit there, keep in sync with JIRA
 BODIES = __import__("json").load(open("/Users/taskeen/marketplace/debt_bodies.json", encoding="utf-8"))
 SEVNAME = {"🟡": "medium", "🟢": "low", "🔴": "high"}
-DEBT_DONE = {"C1", "C2", "SD2", "SD8", "SD1"}  # cleared debt (PR merged, KPI green) — flip here when each debt task lands
+DEBT_DONE = {"C1", "C2", "SD2", "SD8", "SD1", "D1", "D5"}  # cleared debt (PR merged, KPI green) — flip here when each debt task lands
 for did, dtitle, dsev, dsvc, dfix, dimp, dkpi, dtype, depic in debt:
     # JIRA project MAR ไม่มี issue type Bug -> ใช้ Story + label "bug" (ตรงกับการ์ดจริง MAR-54..71)
     labels = "tech-debt bug" if dtype == "Bug" else "tech-debt"
