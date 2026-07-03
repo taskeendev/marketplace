@@ -9,7 +9,7 @@ greenfield ทั้งหมด · **Java 21 + Spring Boot 3.4.x + Maven** · *
 **Kong** gateway · **multi-repo** `marketplace-*` ใต้ GitHub **taskeendev** (common lib ผ่าน GitHub Packages) ·
 role **BUYER/SELLER/ADMIN** · **Postgres ต่อ service + Flyway** · catalog = สต็อกก้อนเดียว (atomic/idempotent) ·
 **P1 รูป = URL อย่างเดียว** · **P0/P1 รัน docker-compose ในเครื่อง** (deploy จริงทีหลัง) · i18n typed TH/EN ·
-JWT(HS512) access ใน memory + refresh ใน HttpOnly cookie · cart ฝั่ง server · search P1 = PG full-text · ฿ THB ·
+JWT(HS512) access ใน memory + refresh ใน HttpOnly cookie · cart ฝั่ง server · search P1 = ILIKE substring · ฿ THB ·
 AI = Hermes (P4) · จ่ายเงินจริง = P5 · แพลนภาษาไทย
 
 ## สถาปัตยกรรม + repos
@@ -82,7 +82,7 @@ qty)`
 | `POST /api/auth/register` | public | `{email, username, password}` | `201 {id, username, email, role:"BUYER"}` | 400 errors, 409 dup |
 | `POST /api/auth/login` | public | `{username, password}` | `200 {accessToken, expiresIn}` + Set-Cookie refresh | 401 |
 | `POST /api/auth/refresh` | cookie | — (refresh cookie) | `200 {accessToken, expiresIn}` | 401 |
-| `POST /api/auth/logout` | Bearer | — | `204` | 401 |
+| `POST /api/auth/logout` | cookie | — (refresh cookie) | `204` + Set-Cookie clear refresh | — |
 | `GET /api/users/me` | Bearer | — | `200 {id, username, email, role}` | 401 |
 | `GET /health` | public | — | `200 {status:"UP"}` | — |
 
@@ -101,7 +101,7 @@ qty)`
 - [ ] **P1-T3: shop** — สร้าง/ดูร้าน (เจ้าของ 1 ร้าน/คนใน MVP) · verify: SELLER สร้างร้านได้, BUYER โดน 403
 - [ ] **P1-T4: product CRUD (seller)** — ลง/แก้/ลบ/ดูสินค้าของร้านตัวเอง (มี i18n field + ราคา + รูป URL + สต็อกเริ่มต้น) · verify: ลงสินค้าแล้ว inventory ถูกสร้าง stock=ที่กรอก
 - [ ] **P1-T5: inventory decrement (atomic+idempotent)** — `POST /api/catalog/inventory/decrement`: `UPDATE … WHERE stock_qty>=qty` + เขียน `stock_ledger` ตาม idempotency_key · verify: **เทสต์ขนานบน stock=1 → สำเร็จ 1 อันเท่านั้น**; ยิงซ้ำ key เดิม → ไม่ตัดเบิ้ล
-- [ ] **P1-T6: public browse/search** — `GET /products` (q + categoryId + paging, PG full-text บน title), `GET /products/{id}` · verify: ค้นหาเจอ, สินค้า banned/draft ไม่โผล่
+- [ ] **P1-T6: public browse/search** — `GET /products` (q + categoryId + paging, ILIKE substring บน title TH/EN), `GET /products/{id}` · verify: ค้นหาเจอ, สินค้า banned/draft ไม่โผล่
 - [ ] **P1-T7: order scaffold + cart** — Boot+Postgres+Flyway · ตะกร้าต่อผู้ซื้อ (เพิ่ม/แก้จำนวน/ลบ) · verify: เพิ่มของลงตะกร้าแล้วดูได้
 - [ ] **P1-T8: checkout (mock)** — `POST /api/orders/checkout`: แตกตะกร้าตามร้าน → เรียก catalog decrement (idempotency=orderId) → สร้าง order/order_item (status `paid_mock`) → เคลียร์ตะกร้า; ถ้าของหมด rollback ทั้งบิล · verify: checkout สำเร็จ stock ลด; ของหมด → 409 ไม่สร้าง order
 - [ ] **P1-T9: orders (buyer/seller)** — buyer ดูออเดอร์ตัวเอง; seller ดูออเดอร์ร้าน + อัปสถานะ (paid_mock→shipped→done) · verify: เห็นตรงฝั่ง, อัปสถานะผิดลำดับ → 400
@@ -118,11 +118,11 @@ qty)`
 | `GET /api/catalog/categories` | public | — | `200 [{id, slug, nameEn, nameTh}]` | — |
 | `POST /api/catalog/shops` | SELLER | `{name, slug?, description}` | `201 {id, ownerUsername, name, slug, description}` | 403/409 |
 | `GET /api/catalog/shops/me` | SELLER | — | `200 {shop…}` | 404 |
-| `GET /api/catalog/shops/{slug}` | public | — | `200 {shop + products}` | 404 |
+| `GET /api/catalog/shops/{slug}` | public | — | `200 {shop}` (สินค้า: `GET /api/catalog/products?shopId=`) | 404 |
 | `POST /api/catalog/shops/me/products` | SELLER | `{categoryId, titleEn, titleTh, descEn, descTh, priceBaht, imageUrls:[], stockQty, status?}` | `201 {id, …, stockQty}` | 400/403 |
 | `PUT /api/catalog/shops/me/products/{id}` | SELLER | (เหมือนสร้าง; stockQty = ตั้งใหม่) | `200 {product}` | 400/403/404 |
 | `GET /api/catalog/shops/me/products` | SELLER | — | `200 [{product + stockQty}]` | 403 |
-| `GET /api/catalog/products` | public | `?q=&categoryId=&page=&size=` | `200 {items:[{id, titleEn, titleTh, priceBaht, imageUrl, shopName, stockQty}], page, total}` | — |
+| `GET /api/catalog/products` | public | `?q=&categoryId=&shopId=&page=&size=` | `200 {items:[{id, titleEn, titleTh, priceBaht, imageUrl, shopName, stockQty}], page, total}` | — |
 | `GET /api/catalog/products/{id}` | public | — | `200 {id, shop, category, titleEn/Th, descEn/Th, priceBaht, images:[], stockQty, status}` | 404 |
 | `POST /api/catalog/inventory/decrement` | internal | `{items:[{productId, qty}], idempotencyKey}` | `200 {ok:true}` | `409 {outOfStock:[productId]}` |
 
@@ -130,9 +130,9 @@ qty)`
 | Method/Path | สิทธิ์ | input | output | error |
 |---|---|---|---|---|
 | `GET /api/orders/cart` | BUYER | — | `200 {items:[{productId, title, priceBaht, qty, lineTotal, stockQty}], total}` | 401 |
-| `POST /api/orders/cart/items` | BUYER | `{productId, qty}` | `200 {cart}` | 400/404 |
+| `POST /api/orders/cart/items` | BUYER | `{productId, qty}` | `200 {cart}` | 400 |
 | `PUT /api/orders/cart/items/{productId}` | BUYER | `{qty}` | `200 {cart}` | 400/404 |
-| `DELETE /api/orders/cart/items/{productId}` | BUYER | — | `200 {cart}` | 404 |
+| `DELETE /api/orders/cart/items/{productId}` | BUYER | — | `200 {cart}` | — |
 | `POST /api/orders/checkout` | BUYER | — (ใช้ตะกร้า) | `201 {orders:[{orderId, shopName, status:"paid_mock", totalBaht}]}` | `409 {outOfStock:[…]}` |
 | `GET /api/orders/me` | BUYER | — | `200 [{orderId, shopName, status, totalBaht, createdAt, items:[{title, qty, unitPriceBaht}]}]` | 401 |
 | `GET /api/orders/shops/me` | SELLER | `?status=` | `200 [orders ของร้าน]` | 403 |
@@ -208,7 +208,7 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 - **ขาเข้า:** FB webhook → social normalize → `POST {chat}/internal/inbound {channel:fb, pageId, externalId, displayName, body}` → chat map pageId→shop, find-or-create external conversation, persist, **broadcast เข้า WS ของ seller** → seller เห็นใน `/chat` (badge FB)
 - **ขาออก:** seller ตอบในห้อง fb → `POST {social}/internal/send {pageId, externalId, body}` → social → Meta Send API (**mock:** บันทึก `outbound_log`)
 
-**Mock Meta:** Send = mock client หลัง interface (บันทึก+log; เสียบ Graph จริงทีหลัง) · inbound = `POST /internal/social/simulate-inbound` จำลอง webhook (smoke/demo) · connection = "เชื่อม FB Page (mock)" ผูก `pageId↔shop` + fake token
+**Mock Meta:** Send = mock client หลัง interface (บันทึก+log; เสียบ Graph จริงทีหลัง) · inbound = `POST /api/social/simulate-inbound` (SELLER) จำลอง webhook (smoke/demo) · connection = "เชื่อม FB Page (mock)" ผูก `pageId↔shop` + fake token
 
 **Data model**
 - `chat.conversation`: +`channel` default `'web'`, +`external_id` null, +`display_name` null · unique ใหม่ `(shop_id, channel, external_id)` (web คงเดิม `(buyer_username, shop_id)`)
@@ -220,7 +220,7 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 |---|---|---|---|
 | `GET /webhooks/fb` | social | public | Meta webhook verify (echo `hub.challenge`) |
 | `POST /webhooks/fb` | social | (Meta sig) | รับ event → normalize → เรียก chat `/internal/inbound` |
-| `POST /internal/social/simulate-inbound` | social | internal | จำลอง FB inbound (dev/smoke) |
+| `POST /api/social/simulate-inbound` | social | SELLER (เจ้าของ page) | จำลอง FB inbound (dev/smoke) |
 | `POST /internal/social/send` | social | `X-Internal-Key` | mock Meta Send + บันทึก `outbound_log` |
 | `POST /internal/chat/inbound` | chat | `X-Internal-Key` | find-or-create external conversation + persist + broadcast WS |
 | `POST /api/social/connections` | social | SELLER | เชื่อม FB Page (mock) ผูก `pageId↔shop` |
@@ -232,7 +232,7 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 **แตกงาน (P3a-T1..T6 — ทำทีละ task + test ก่อน done)**
 - **T1 [BE]** scaffold `marketplace-social` (:8085, Postgres+Flyway+common) + `page_connection` + webhook verify (GET challenge) → boot + test
 - **T2 [BE]** chat extend conversation/message (channel/external) + `POST /internal/chat/inbound` (find-or-create external + broadcast WS) → test
-- **T3 [BE]** social: receive `POST /webhooks/fb` → normalize → เรียก chat `/inbound` + `POST /internal/social/simulate-inbound` → test
+- **T3 [BE]** social: receive `POST /webhooks/fb` → normalize → เรียก chat `/inbound` + `POST /api/social/simulate-inbound` → test
 - **T4 [BE]** outbound: seller ตอบในห้อง fb → chat เรียก social `/internal/send` → mock send + `outbound_log` → test
 - **T5 [GW]** Kong route `/api/social` + `/webhooks/fb` · compose +social +postgres-social · run.sh build social · **smoke step 11**
 - **T6 [FE]** web: channel badge + external name ใน `/chat` + "connect FB (mock)" + ปุ่ม dev simulate
