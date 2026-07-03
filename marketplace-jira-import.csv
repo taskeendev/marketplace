@@ -406,7 +406,7 @@ Story,[debt] SD8: webhook ไม่ dedup message id (mid),,P3 omnichannel socia
 | 1 | POST webhook ด้วย mid เดียวกัน 2 ครั้งติดกัน | ข้อความใน DB มี 1 แถว (count=1) | มีข้อความซ้ำ (count=2 หรือมากกว่า) |
 | 2 | POST webhook ด้วย mid คนละอัน 2 ครั้ง | ข้อความใน DB มี 2 แถว (count=2) | dedup พลาด บันทึกเหลือแค่ 1 |
 | 3 | ครั้งที่ 2 (mid ซ้ำ) ดู HTTP response | ตอบ 200 OK ปกติ ไม่ error (Meta จะได้ไม่ยิงซ้ำเพราะคิดว่าล้มเหลว) | ตอบ 500 หรือ error จน Meta retry ซ้ำอีก |"
-Story,[debt] SDc1: FB OAuth state ไม่ validate (CSRF),,P3 omnichannel social,tech-debt,To Do,"🔧 **auth · BE (security)** · 🟢 low
+Story,[debt] SDc1: FB OAuth state ไม่ validate (CSRF),,P3 omnichannel social,tech-debt,Done,"🔧 **auth · BE (security)** · 🟢 low
 
 **ปัญหา (อธิบายง่ายๆ):** ตอนล็อกอินด้วย Facebook เราจะส่งค่าสุ่มชื่อ `state` ไปกับ FB แล้ว FB ต้องส่งค่าเดิมกลับมาที่หน้า callback ของเรา แต่ตอนนี้เราไม่ได้เช็คว่า `state` ที่ส่งกลับมาตรงกับที่เราส่งไปไหม ทำให้ผู้ไม่หวังดีปลอมคำขอ callback มาสวมรอยล็อกอินให้เหยื่อได้ (CSRF).
 
