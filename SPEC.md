@@ -336,6 +336,21 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 **Test (MockWebServer stub catalog/order/chat):** PRICE→ราคาจริงจาก stub · STOCK→เหลือ N (และเคส 0) · ORDER_STATUS(web)→สถานะจริง · UNKNOWN→fallback · external+ORDER_STATUS→fallback · **disabled shop→`{handled:false}` ไม่ยิง chat/reply** · search ว่าง→guardrail reply
 **smoke step 13 (ทำใน T4):** reuse FB inbound แบบ step 11 ผ่าน Kong — simulate "ราคาเท่าไหร่" เข้าร้านที่เปิด Hermes → poll `GET messages` ~3s → มี message `senderUsername="hermes"` ที่มีเลขราคาจริงของสินค้า seed · ร้านปิด Hermes → หลัง 3s ไม่มี message hermes
 
+### P4a-T5 — web: Hermes toggle + ป้ายบอท (รายละเอียด input/output — pin ก่อน build)
+
+**หน้า `/seller` — component ใหม่ `HermesToggle` (การ์ดวางต่อจาก FbConnect, แสดงเมื่อมีร้านแล้วเท่านั้น)**
+- **โหลด:** `GET /api/agent/config` (SELLER token ผ่าน Kong) → `200 {enabled:boolean}` · error/ยังโหลดไม่เสร็จ → แสดง loading, toggle กดไม่ได้
+- **สลับ:** `POST /api/agent/config {enabled:!current}` → `200 {enabled:boolean}` → อัปเดต state จาก response (ไม่เดาเอง) · ระหว่างรอ → ปุ่ม disabled · error → ข้อความ `t.hermes.failed` (pattern เดียวกับ FbConnect)
+- **State:** `enabled: boolean | undefined`(undefined=loading) · `busy` · `msg`
+- **UI:** CardTitle `t.hermes.title` ("Hermes — บอทช่วยตอบแชต") + คำอธิบาย `t.hermes.hint` (ตอบราคา/สต็อก/สถานะออเดอร์อัตโนมัติ) + ปุ่มสลับสถานะ: เปิดอยู่ → ปุ่ม outline "ปิดบอท" + ป้ายเขียว "เปิดอยู่" · ปิดอยู่ → ปุ่ม primary "เปิดบอท"
+
+**หน้า `/chat` — ป้ายบอท**
+- เงื่อนไข render ต่อ message: `m.senderUsername === 'hermes'` → บับเบิลฝั่งซ้าย (ไม่ใช่ mine อยู่แล้ว) เพิ่มหัวบรรทัดเล็ก `🤖 {t.chat.bot}` เหนือ body + พื้นหลังต่างจากคนจริง (`bg-accent`) — ทั้งฝั่ง buyer และ seller เห็นเหมือนกัน
+- ไม่มี state ใหม่ (เช็คตอน render เท่านั้น)
+
+**i18n (th/en):** `hermes.{title, hint, enable, disable, on, failed}` + `chat.bot`
+**Verify:** `npm run build` เขียว · ผ่าน Kong จริง: toggle ใน UI → `GET /api/agent/config` คืนค่าตรงปุ่ม (สลับ 2 รอบ) · message จาก hermes ใน chat มีป้าย 🤖 (spot-check DOM ผ่าน web :3000)
+
 **แตกงาน (P4a-T1..T5)**
 - **T1 [BE]** scaffold `marketplace-agent` (:8086, agentdb, common) + `agent_config` + `POST/GET /api/agent/config` (SELLER) + CatalogClient/OrderClient (read-only tools) → test
 - **T2 [BE]** chat: `POST /internal/chat/reply` (บอท reply + broadcast + outbound relay) + `AgentClient` + ยิง agent เมื่อมีข้อความ**ฝั่งลูกค้า** (best-effort, กัน loop) + `AGENT_URL` → test
