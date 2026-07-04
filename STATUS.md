@@ -3,8 +3,13 @@
 > จุดเดียวที่บอกว่า "อยู่ตรงไหน + ทำอะไรต่อ" — อัปเดตทุกครั้งที่ปิด task
 > Source of truth ลึก = [SPEC.md](./SPEC.md) · tracker = JIRA project **MAR** (@devtaskeen.atlassian.net, ผ่าน Atlassian MCP)
 
-## ตอนนี้อยู่ตรงไหน (2026-07-03)
-- **เสร็จ:** P0 · P1 · P2 · P3 (a/b/c) · **P4a ครบทั้งเฟส (T1..T5)** — T4 (MAR-48): Kong `/api/agent` + compose agent + **smoke 13/13 สด** + Hermes search scope ตามร้าน (บั๊ก HIGH จาก review — catalog#15, agent#4) · T5 (MAR-49): web HermesToggle บน /seller + ป้าย 🤖 บนข้อความ `hermes` ใน /chat + i18n (web#18, roundtrip config ผ่าน Kong verified)
+## ตอนนี้อยู่ตรงไหน (2026-07-04)
+- **เฟส Ops กำลังทำ (Epic MAR-80, spec ใน SPEC.md "เฟส Ops", 8 tasks Ops-T1..T8 = MAR-81..88):**
+  - ✅ **Ops-T1 (I1, MAR-81)** — common publish GitHub Packages (tag v0.1.0, publish.yml เขียว บน Actions)
+  - ⏸️ **Ops-T2/T3 (CI+GHCR, MAR-82/83) — รอ user:** repo ทั้งหมด private → GITHUB_TOKEN ของ CI repo อื่นอ่าน package common ข้ามไม่ได้ (404). auth CI PR #6 เปิดค้าง (แดง). **ปลดล็อก: ทำ common package เป็น public** (github.com/taskeendev/marketplace-common → Packages → marketplace-common → Package settings → Change visibility → Public) แล้วบอกผม re-run CI. (ผมไม่มี packages scope เลยพลิกเองไม่ได้)
+  - 🟡 **Ops-T4 (k8s, MAR-84)** — manifests เสร็จ+merged (deploy#11, kustomize 31 objects) แต่ **live deploy ติด Docker daemon ตัน** → **ปลดล็อก: restart Docker Desktop → `cd ~/marketplace-deploy && ./deploy-kind.sh`**
+  - ⬜ Ops-T5 (D4 Redis) · T6 (observability) · T7 (CMN1) · T8 (HPA+smoke) — ยังไม่เริ่ม
+- **เสร็จ:** P0 · P1 · P2 · P3 (a/b/c) · **P4a ครบ (T1..T5)** — T4 (MAR-48) Kong `/api/agent`+smoke 13/13 · T5 (MAR-49) web HermesToggle+🤖 badge
 - deploy note: JVM ทั้ง 6 cap `-Xmx256m` + Kong 1 worker — Docker VM 3.8GB OOM ตอน 7 JVM cold start (auth exit 137); run.sh guard ตัวแปร .env ใหม่
 - ✅ **spec-sync ครบ 5 จุด (MAR-77, 2026-07-03):** logout · search=ILIKE · shops/{slug} · cart error → แก้ SPEC in-place (#95) · simulate-inbound gate SELLER+owner = โค้ด (social#8) + shops/{slug} cleanup (catalog#16); verify สดผ่าน Kong
 - **ถัดไป (เลือก):** P4b (Hermes admin tools) **หรือ** P5 (จ่ายเงินจริง/รีวิว/wishlist) **หรือ** เฟส Ops (deploy จริง + CI/CD + monitoring)
