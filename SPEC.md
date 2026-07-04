@@ -360,6 +360,32 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 
 **Non-goals (P4a):** เรียก LLM/Claude จริง (interface พร้อม, mock ก่อน) · streaming · memory ข้าม turn · admin tools (P4b) · rate-limit คำตอบบอท · multi-step tool planning
 
+---
+
+## เฟส Ops — deploy จริง (local k8s) + CI/CD + observability + infra debt (เคาะ 2026-07-04)
+
+**เป้าหมาย:** ยกสแตกจาก docker-compose (local orchestration) ขึ้น **kubernetes จริง (local)** + มี **CI/CD** อัตโนมัติ + **observability เต็มระบบ** + ปิด infra debt 3 ตัว (I1, D4, CMN1). โฟกัส = resume DevOps/SRE, zero-cost, รันบนเครื่องได้จริง
+
+**การตัดสินใจ (default — ไม่ถามซ้ำ):**
+- **k8s local = `kind`** (single binary, ใกล้ cluster จริง, สร้าง/ทิ้งเร็ว, ใช้ใน CI ได้)
+- **คง Kong ไว้** เป็น Deployment (DB-less, `kong.yml` ผ่าน ConfigMap) — **ไม่แทนด้วย Ingress-nginx** เพราะจะเสีย custom plugin `jwt-hs512` + Origin allowlist + header inject. cluster Ingress → Kong Service → services
+- **Prometheus/Grafana เขียน manifest เอง** (Deployment + ConfigMap + provisioned dashboards) ไม่ใช้ kube-prometheus-stack Helm — เรียนรู้มากกว่า + เบากว่า; reuse `~/monitor/prometheus.yml` เป็นฐาน
+- **CMN1 = HMAC-signed headers** (Kong เซ็น X-Auth-* + ts; service verify) — ไม่ใช่ mTLS/service-mesh (future)
+- **CI = GitHub Actions**, 1 workflow/repo; **images → GHCR** `ghcr.io/taskeendev/*` tag `sha-<short>` + `latest`
+- k8s manifests อยู่ใน `marketplace-deploy/k8s/` (kustomize) — repo เดิม ไม่แตก repo ใหม่
+
+**แตกงาน (Ops-T1..T8)** — dependency: T1→T2→T3→T4→(T5,T6,T7)→T8
+- [ ] **Ops-T1 [Infra] I1: common → GitHub Packages** — `marketplace-common` เพิ่ม `distributionManagement` (GitHub Packages) + workflow publish (on push main / tag) + repo ที่ depend เพิ่ม `settings.xml`/repo config auth ด้วย `GITHUB_TOKEN` · verify: build repo ที่ depend common บน runner ที่**ไม่มี** `~/.m2` common → resolve จาก Packages ผ่าน (จำลอง: `mvn -Dmaven.repo.local=$(mktemp -d) test` เขียว)
+- [ ] **Ops-T2 [Infra] CI build+test ทุก repo** — `.github/workflows/ci.yml` ต่อ service repo: checkout → setup-java 21 → `mvn -B verify` (Testcontainers บน ubuntu runner มี Docker) · web: `npm ci` + `npm run build` · common จาก Packages · verify: เปิด PR → check เขียว; ทำเทสพังใน branch → check แดง (บล็อก merge)
+- [ ] **Ops-T3 [Infra] Docker images → GHCR** — workflow build+push ต่อ service (docker/build-push-action) on merge main; login GHCR ด้วย `GITHUB_TOKEN`; tag `sha-<short>` + `latest` · verify: merge → image ขึ้น `ghcr.io/taskeendev/marketplace-<svc>`; `docker pull` sha tag ได้
+- [ ] **Ops-T4 [Infra] k8s base manifests (kind)** — `k8s/`: namespace `marketplace`; ConfigMap (env ไม่ลับ) + Secret (JWT_SECRET, INTERNAL_API_KEY, db creds); postgres ต่อ service = StatefulSet + PVC + Service; service Deployment (image GHCR) + Service + **liveness/readiness probe** (`/health`) + resources requests/limits; Kong Deployment + ConfigMap(kong.yml) + Service; Ingress → Kong · verify: `kind create cluster` + `kubectl apply -k k8s/` → ทุก pod `Ready` + port-forward Kong → **`smoke.sh` (ชี้ Ingress/port-forward) ผ่านครบ 13 step**
+- [ ] **Ops-T5 [BE/Infra] D4: Redis WS pub/sub + chat 2 replica** — chat: broadcaster publish message → Redis channel → ทุก instance subscribe → ส่งเข้า WS session ของ instance ตัวเอง (registry ยัง in-memory ต่อ instance, fan-out ข้าม instance ผ่าน Redis); +Redis (Deployment/StatefulSet); k8s chat `replicas: 2` · verify: test (Testcontainers Redis) publish instance A → instance B ได้รับ; k8s: 2 client คนละ pod ส่งถึงกัน (extend smoke WS step)
+- [ ] **Ops-T6 [Infra] Observability เต็มระบบ** — `micrometer-registry-prometheus` ทุก Java service (expose `/actuator/prometheus`) + Prometheus Deployment (scrape services ผ่าน k8s SD/annotation) + Grafana Deployment (provisioned datasource + **overview dashboard** + **per-service dashboard**: req rate, 5xx error rate, latency p99, JVM heap) + **alert rules** (`up==0`, 5xx rate สูง, p99 สูง) · verify: Grafana มีข้อมูลจริงหลังยิง smoke; `kubectl delete pod` 1 ตัว → Prometheus `/alerts` เห็น `up==0` firing
+- [ ] **Ops-T7 [Security] CMN1: signed headers Kong↔service** — `jwt-hs512` plugin: หลัง verify JWT + set `X-Auth-User/Role` → เซ็น `X-Auth-Sig = HMAC-SHA256(secret, "user|role|ts")` + `X-Auth-Ts`; `marketplace-common` HeaderAuthFilter: verify sig + ts (replay window ~30s) ก่อนเชื่อ identity, ไม่มี/หมดอายุ/ไม่ตรง → 401 · verify: ยิง service ตรง (bypass Kong ผ่าน port-forward) ด้วย `X-Auth-*` ปลอมไม่มี sig → **401**; ผ่าน Kong (มี sig) → 200 (ต่อยอด MAR-72)
+- [ ] **Ops-T8 [Infra] HPA + k8s smoke gate** — HPA (chat/catalog, CPU target) + `smoke.sh` ชี้ k8s Ingress ผ่านครบ + (option) CI job: `kind` + apply + smoke · verify: smoke ครบทุก step บน k8s เขียว; โหลด CPU → HPA scale replica เพิ่ม (spot-check `kubectl get hpa`)
+
+**Non-goals (Ops):** cloud จริง (AWS/GCP/DO) · service mesh (Istio/Linkerd) · mTLS (HMAC ก่อน) · log aggregation (Loki/ELK) · secrets manager (Vault/SOPS) · GitOps (ArgoCD — kustomize+kubectl ก่อน) · multi-cluster/multi-region
+
 **Phase 5 — ทีหลัง** · จ่ายเงินจริง (PromptPay/บัตร) · รีวิว/ดาว · wishlist · ระบบแนะนำสินค้า
 
 ---
