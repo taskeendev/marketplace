@@ -10,7 +10,8 @@
   - ✅ **Ops-T3 (GHCR, MAR-83)** — publish-image workflow ทั้ง 7 repo push images ขึ้น `ghcr.io/taskeendev/marketplace-*` (tag sha-<short>+latest) on merge main. **CI/CD ครบ T1→T3**
   - 🟡 **Ops-T4 (k8s, MAR-84)** — manifests เสร็จ+merged (deploy#11+#12, kustomize 33 objects) แต่ **live deploy ติด Docker daemon ตัน** → **ปลดล็อก: restart Docker Desktop → `cd ~/marketplace-deploy && ./deploy-kind.sh`** (image build local + kind load)
   - ✅ **Ops-T5 (D4 Redis, MAR-85)** — chat WS broadcast fan-out ข้าม instance ผ่าน Redis pub/sub (chat#20 code+test, CI 35 เขียว incl. RedisFanoutTest Testcontainers Redis; deploy#12 k8s redis + chat replicas=2). cross-pod live = verify ที่ T8
-  - ⬜ Ops-T6 (observability) · T7 (CMN1 signed headers) · T8 (HPA+k8s smoke) — ยังไม่เริ่ม (T7 = โค้ด verify ผ่าน CI ได้; T6/T8/T4-live รอ docker)
+  - ✅ **Ops-T7 (CMN1 signed headers, MAR-87)** — common HeaderAuthFilter signed mode (HMAC X-Auth-Sig+Ts, config-gated, backward-compat) CI-verified 6/0 + **common 0.2.0 published**; gateway Kong เซ็น header (luac OK); HEADER_SIG_SECRET env. **activation รอ T8:** services bump common 0.2.0 + สร้าง filter (secret, required=true) + verify live (bypass Kong→401)
+  - ⬜ Ops-T6 (observability Prometheus/Grafana) · T8 (HPA+k8s smoke) — ยังไม่เริ่ม. **ทั้ง T4-live + T6 + T8 + CMN1-activation ต้อง docker/cluster** → restart Docker Desktop แล้วทำรวดเดียว
   - **⚠️ git process:** อย่า checkout main กลางทางแล้วลืม checkout branch ก่อน commit ถัดไป (เคย commit ลง main โดยไม่ตั้งใจ); poll CI ต้องรอ run id ใหม่ ไม่ใช่ `--limit 1` ทันที
 - **เสร็จ:** P0 · P1 · P2 · P3 (a/b/c) · **P4a ครบ (T1..T5)** — T4 (MAR-48) Kong `/api/agent`+smoke 13/13 · T5 (MAR-49) web HermesToggle+🤖 badge
 - deploy note: JVM ทั้ง 6 cap `-Xmx256m` + Kong 1 worker — Docker VM 3.8GB OOM ตอน 7 JVM cold start (auth exit 137); run.sh guard ตัวแปร .env ใหม่
