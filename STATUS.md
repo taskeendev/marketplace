@@ -5,9 +5,10 @@
 
 ## ตอนนี้อยู่ตรงไหน (2026-07-04)
 - **เฟส Ops กำลังทำ (Epic MAR-80, spec ใน SPEC.md "เฟส Ops", 8 tasks Ops-T1..T8 = MAR-81..88):**
-  - ✅ **Ops-T1 (I1, MAR-81)** — common publish GitHub Packages (tag v0.1.0, publish.yml เขียว บน Actions)
-  - ⏸️ **Ops-T2/T3 (CI+GHCR, MAR-82/83) — รอ user:** repo ทั้งหมด private → GITHUB_TOKEN ของ CI repo อื่นอ่าน package common ข้ามไม่ได้ (404). auth CI PR #6 เปิดค้าง (แดง). **ปลดล็อก: ทำ common package เป็น public** (github.com/taskeendev/marketplace-common → Packages → marketplace-common → Package settings → Change visibility → Public) แล้วบอกผม re-run CI. (ผมไม่มี packages scope เลยพลิกเองไม่ได้)
-  - 🟡 **Ops-T4 (k8s, MAR-84)** — manifests เสร็จ+merged (deploy#11, kustomize 31 objects) แต่ **live deploy ติด Docker daemon ตัน** → **ปลดล็อก: restart Docker Desktop → `cd ~/marketplace-deploy && ./deploy-kind.sh`**
+  - ✅ **Ops-T1 (I1, MAR-81)** — common publish GitHub Packages (tag v0.1.0)
+  - ✅ **Ops-T2 (CI, MAR-82)** — GitHub Actions build+test ครบ 7 repo เขียว (6 Java resolve common จาก Packages via **PACKAGES_TOKEN** = PAT read:packages, repo secret ทั้ง 6; web = npm). GITHUB_TOKEN อ่าน package ข้าม repo ไม่ได้แม้ public → ต้อง PAT. **⚠️ PAT อยู่ใน transcript — ควร rotate**
+  - ✅ **Ops-T3 (GHCR, MAR-83)** — publish-image workflow ทั้ง 7 repo push images ขึ้น `ghcr.io/taskeendev/marketplace-*` (tag sha-<short>+latest) on merge main. **CI/CD ครบ T1→T3**
+  - 🟡 **Ops-T4 (k8s, MAR-84)** — manifests เสร็จ+merged (deploy#11, kustomize 31 objects) แต่ **live deploy ติด Docker daemon ตัน** → **ปลดล็อก: restart Docker Desktop → `cd ~/marketplace-deploy && ./deploy-kind.sh`** (ใช้ image build local + kind load; ไม่พึ่ง GHCR สำหรับ local)
   - ⬜ Ops-T5 (D4 Redis) · T6 (observability) · T7 (CMN1) · T8 (HPA+smoke) — ยังไม่เริ่ม
 - **เสร็จ:** P0 · P1 · P2 · P3 (a/b/c) · **P4a ครบ (T1..T5)** — T4 (MAR-48) Kong `/api/agent`+smoke 13/13 · T5 (MAR-49) web HermesToggle+🤖 badge
 - deploy note: JVM ทั้ง 6 cap `-Xmx256m` + Kong 1 worker — Docker VM 3.8GB OOM ตอน 7 JVM cold start (auth exit 137); run.sh guard ตัวแปร .env ใหม่
