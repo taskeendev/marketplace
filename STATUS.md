@@ -24,7 +24,8 @@
 - **ถัดไป (เลือก):** P4b (Hermes admin tools) **หรือ** P5 (จ่ายเงินจริง/รีวิว/wishlist) **หรือ** เฟส Ops (deploy จริง + CI/CD + monitoring)
 
 ## ค้างอยู่ / จำไว้ (จาก spec audit 2026-07-02)
-- ✅ **tech-debt เคลียร์ครบ 13/13 (2026-07-03)**: C1 C2 SD1 SD2 SD8 D1 D5 OD1 SDc1 C3 CD1 O1 + MAR-74 (Origin allowlist) — ทุกใบมีเทสตาม KPI + PR merged + MAR-xx Done. เหลือ debt ที่**เลื่อนโดยตั้งใจ**: D4/I1/CMN1 (เฟส Ops) · ~~D6~~ · SD6/SD7 (ติด Meta จริง)
+- ✅ **tech-debt เคลียร์ครบ 13/13 (2026-07-03)**: C1 C2 SD1 SD2 SD8 D1 D5 OD1 SDc1 C3 CD1 O1 + MAR-74 (Origin allowlist) — ทุกใบมีเทสตาม KPI + PR merged + MAR-xx Done. เหลือ debt ที่**เลื่อนโดยตั้งใจ**: D4/I1/CMN1 (เฟส Ops) · ~~D6~~ · ~~SD6/SD7~~ (ทำ partial ด้วย mock Graph แล้ว; เหลือแค่เสียบ real Graph ตอน Meta verify)
+- ✅ **SD6 (MAR-65) + SD7 (MAR-66) DONE 2026-07-05** — social · BE. seam `FbGraph`+`MockFbGraph`: SD6 page token จาก `exchangePageToken` (เลิก hardcode 'mock', social#14) · SD7 inbound display_name จาก `fetchProfileName` + fallback "FB <id>" (social#15). **KPI: social suite 28/28** (ConnectionTest token≠mock/2 code→2 token · DisplayNameTest ชื่อจริง/ไม่มี "FB "/Graph error→fallback ไม่ crash). real Graph client เสียบหลัง `FbGraph` ตอน Meta verify
 - ✅ **D6 (MAR-59) DONE 2026-07-05** — WS keep-alive: D6-a chat ping→pong (chat#24) + D6-b web reconnect/backoff/refresh-on-4401/heartbeat/give-up→banner + Vitest 5/5 (web#23) + smoke ws_check ping/pong (deploy#19). **KPI: ChatWebSocketTest 8/8 · npm test 5/5 · smoke 18/18 สด `WS_PING_PONG_OK` ผ่าน Kong**. spec = SPEC.md "D6 keep-alive"
 - ✅ auth bypass MAR-72 (verified live) · ✅ ordering fix ใน T3 · ✅ spec-sync 5 จุด (MAR-77)
 - เฟส **Ops (สุดท้าย, เคาะแล้ว — ห้ามดึงมาก่อน)**: deploy จริง + CI/CD + Prometheus/Grafana — ยังไม่เขียนลง SPEC.md เป็นเฟส · ขยาย P5 (cancel/refund/address/รูป upload)

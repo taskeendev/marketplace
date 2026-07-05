@@ -248,6 +248,21 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 - **T5 [GW]** Kong route `/api/social` + `/webhooks/fb` · compose +social +postgres-social · run.sh build social · **smoke step 11**
 - **T6 [FE]** web: channel badge + external name ใน `/chat` + "connect FB (mock)" + ปุ่ม dev simulate
 
+### SPEC — P3a debt: SD6 (MAR-65) + SD7 (MAR-66) — real page token + display_name ผ่าน Graph (mock)
+**เคาะแล้ว 2026-07-05:** รวม Graph calls เป็น seam เดียว `FbGraph` + `MockFbGraph` (ตาม `auth.GraphClient`; real client เสียบทีหลัง gated by `fb.graph-url/app-id/app-secret`) · `code`=optional (server-gen ถ้าไม่ส่ง → **web ไม่ต้องแตะ**) · ทั้งคู่ social · BE, 2 task/2 PR, **SD6 ก่อน SD7**
+
+**FbGraph seam** (interface + `MockFbGraph`)
+| method | ใช้โดย | mock behavior |
+|---|---|---|
+| `String exchangePageToken(String code, String pageId)` | SD6 connect | token derive จาก code (deterministic, code ต่าง→token ต่าง) ไม่ hardcode 'mock' |
+| `Optional<String> fetchProfileName(String pageToken, String psid)` | SD7 inbound | คืน `"Customer <last4 psid>"` (ไม่ขึ้นต้น "FB ") |
+
+**SD6 — page token:** `ConnectRequest` +`code` (optional) · `ConnectionService.connect(user, role, pageId, code)`: `code = req.code() ?? "mockcode-"+pageId` → `token = fbGraph.exchangePageToken(code, pageId)` → save/update (re-point เดิม → `setPageToken` ค่าใหม่ด้วย) · **เลิกใช้** `"mock-token-"+pageId`
+- **KPI (integration test social):** connect ด้วย code → `page_token` ≠ 'mock' & len>0 · exchange 2 code ต่างกัน → 2 token ต่างกัน
+
+**SD7 — display_name:** `WebhookService.relay`: `displayName` null/blank → `fbGraph.fetchProfileName(conn.pageToken, externalId)` → ใช้ชื่อ · error/empty → fallback `"FB "+last4` (try/catch, ไม่ crash) · simulate path (displayName != null) → ใช้ค่าเดิม Graph ไม่ถูกเรียก
+- **KPI (integration test social):** mock คืน "สมชาย ใจดี" → `display_name`="สมชาย ใจดี" · 3 inbound → ไม่มีห้องขึ้นต้น "FB " · mock throw → fallback "FB <id>" + ไม่ 500
+
 ### SPEC — P3b: Product sync (catalog → FB Shops, mock)
 **เคาะแล้ว (brainstorm 2026-07-01):** seller กดปุ่ม **"sync ทั้งหมดไป FB"** (manual) · **social** เป็นเจ้าของ FB catalog sync · mock Meta · scope = push สินค้า **ACTIVE ทั้งหมด**, กดซ้ำ = upsert, ไม่จัดการลบ (Lean) · reuse route `/api/social` + service social เดิม (P3a) → ไม่ต้องแตะ gateway/compose
 
