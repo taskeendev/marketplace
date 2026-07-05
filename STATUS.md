@@ -6,7 +6,7 @@
 ## ตอนนี้อยู่ตรงไหน (2026-07-04)
 - **เฟส Ops กำลังทำ (Epic MAR-80, spec ใน SPEC.md "เฟส Ops", 8 tasks Ops-T1..T8 = MAR-81..88):**
   - ✅ **Ops-T1 (I1, MAR-81)** — common publish GitHub Packages (tag v0.1.0)
-  - ✅ **Ops-T2 (CI, MAR-82)** — GitHub Actions build+test ครบ 7 repo เขียว (6 Java resolve common จาก Packages via **PACKAGES_TOKEN** = PAT read:packages, repo secret ทั้ง 6; web = npm). GITHUB_TOKEN อ่าน package ข้าม repo ไม่ได้แม้ public → ต้อง PAT. **⚠️ PAT อยู่ใน transcript — ควร rotate**
+  - ✅ **Ops-T2 (CI, MAR-82)** — GitHub Actions build+test ครบ 7 repo เขียว (6 Java resolve common จาก Packages via **PACKAGES_TOKEN** = PAT read:packages, repo secret ทั้ง 6; web = npm). GITHUB_TOKEN อ่าน package ข้าม repo ไม่ได้แม้ public → ต้อง PAT. **✅ rotated 2026-07-05** (set ใหม่ 6 repo, CI auth เขียว verify). scope แคบ (read:packages) risk ต่ำ. **เหลือ: คุณ revoke PAT ตัวเก่าใน github.com/settings/tokens**
   - ✅ **Ops-T3 (GHCR, MAR-83)** — publish-image workflow ทั้ง 7 repo push images ขึ้น `ghcr.io/taskeendev/marketplace-*` (tag sha-<short>+latest) on merge main. **CI/CD ครบ T1→T3**
   - ✅ **Ops-T4 (k8s, MAR-84)** — **ยกทั้ง stack ขึ้น kind สำเร็จ, smoke 13/13 ผ่านสด** (15 pod Ready: 7 app+chat×2 / 6 postgres StatefulSet / redis / kong). deploy #11+#12+#14. hardening: startupProbe · REDIS_PORT explicit · enableServiceLinks:false · Recreate strategy · drop CPU limits (Fable review). รัน: `./deploy-kind.sh` → `kubectl -n marketplace port-forward svc/kong 8080:8080 &` → `./smoke.sh`
   - ✅ **Ops-T5 (D4 Redis, MAR-85)** — Redis pub/sub fan-out. **⚠️→✅ แก้บั๊ก half-merge:** PR #20 ทำ MessageBroadcaster หาย publisher (Fable จับ) → PR #21 publish-only. **cross-pod verified live** (smoke step 10, chat replicas=2)
@@ -24,7 +24,8 @@
 - **ถัดไป (เลือก):** P4b (Hermes admin tools) **หรือ** P5 (จ่ายเงินจริง/รีวิว/wishlist) **หรือ** เฟส Ops (deploy จริง + CI/CD + monitoring)
 
 ## ค้างอยู่ / จำไว้ (จาก spec audit 2026-07-02)
-- ✅ **tech-debt เคลียร์ครบ 13/13 (2026-07-03)**: C1 C2 SD1 SD2 SD8 D1 D5 OD1 SDc1 C3 CD1 O1 + MAR-74 (Origin allowlist) — ทุกใบมีเทสตาม KPI + PR merged + MAR-xx Done. เหลือ debt ที่**เลื่อนโดยตั้งใจ**: D4/I1/CMN1 (เฟส Ops) · D6 (e2e FE) · SD6/SD7 (ติด Meta จริง)
+- ✅ **tech-debt เคลียร์ครบ 13/13 (2026-07-03)**: C1 C2 SD1 SD2 SD8 D1 D5 OD1 SDc1 C3 CD1 O1 + MAR-74 (Origin allowlist) — ทุกใบมีเทสตาม KPI + PR merged + MAR-xx Done. เหลือ debt ที่**เลื่อนโดยตั้งใจ**: D4/I1/CMN1 (เฟส Ops) · ~~D6~~ · SD6/SD7 (ติด Meta จริง)
+- ✅ **D6 (MAR-59) DONE 2026-07-05** — WS keep-alive: D6-a chat ping→pong (chat#24) + D6-b web reconnect/backoff/refresh-on-4401/heartbeat/give-up→banner + Vitest 5/5 (web#23) + smoke ws_check ping/pong (deploy#19). **KPI: ChatWebSocketTest 8/8 · npm test 5/5 · smoke 18/18 สด `WS_PING_PONG_OK` ผ่าน Kong**. spec = SPEC.md "D6 keep-alive"
 - ✅ auth bypass MAR-72 (verified live) · ✅ ordering fix ใน T3 · ✅ spec-sync 5 จุด (MAR-77)
 - เฟส **Ops (สุดท้าย, เคาะแล้ว — ห้ามดึงมาก่อน)**: deploy จริง + CI/CD + Prometheus/Grafana — ยังไม่เขียนลง SPEC.md เป็นเฟส · ขยาย P5 (cancel/refund/address/รูป upload)
 - รายการเต็ม audit: workflow `spec-vs-reality-audit` (กลุ่ม A แก้ SPEC เดิม · B เติมก่อน build · C เฟสใหม่)
