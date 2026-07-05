@@ -15,7 +15,9 @@
   - ✅ **Ops-T8 (MAR-88)** — **HPA on catalog** (metrics-server --kubelet-insecure-tls; hpa cpu 2%/70% min1/max2) + **CMN1 activation** (staged per Fable: common 0.2.1 AuthHeaderSigner → 5 svc receiver+4 caller sign → flip required=true chat/social/agent→catalog→order, smoke 13/13 ทุก step). **KPI: forged bypass Kong → 401 (probe-sig.sh)**. common#5 v0.2.1 + 5 svc PR + deploy#16. ปิด debt CMN1 (MAR-70).
   - 🎉 **เฟส Ops ปิดครบ 8/8** (MAR-80 epic Done): T1 Packages · T2 CI · T3 GHCR · T4 k8s-live · T5 Redis(D4) · T6 observability · T7+T8 CMN1 · HPA
   - **⚠️ git process:** อย่า checkout main กลางทางแล้วลืม checkout branch ก่อน commit ถัดไป (เคย commit ลง main โดยไม่ตั้งใจ); poll CI ต้องรอ run id ใหม่ ไม่ใช่ `--limit 1` ทันที
-- **เสร็จ:** P0 · P1 · P2 · P3 (a/b/c) · **P4a ครบ (T1..T5)** — T4 (MAR-48) Kong `/api/agent`+smoke 13/13 · T5 (MAR-49) web HermesToggle+🤖 badge
+- **เสร็จ:** P0 · P1 · P2 · P3 (a/b/c) · **P4 ครบ (epic MAR-45 Done)** = P4a Hermes (T1-5) + **P4b admin/seller tools (T1-6, 2026-07-05)**
+- **P4b (MAR-89..94):** T1 ban user (auth#9) · T2 ban ร้าน/สินค้า (catalog#21) · T3 flash-sale นาทีทอง+effective price (catalog#22) · T4 caption (social#13) · T5 web admin console+flash-sale/caption UI+buyer badge (web#21) · T6 Kong `/api/admin`+seed admin+**smoke 16/16** (gateway#10 deploy#17). Spring gotcha: accessDeniedHandler ต้อง `setStatus` (sendError→/error→401)
+- **เฟส Ops ปิดครบ 8/8** (MAR-80) — k8s(kind) live smoke 13/13 · CI 7 repos · GHCR · Redis D4 · Prometheus/Grafana · CMN1 signed headers · HPA
 - deploy note: JVM ทั้ง 6 cap `-Xmx256m` + Kong 1 worker — Docker VM 3.8GB OOM ตอน 7 JVM cold start (auth exit 137); run.sh guard ตัวแปร .env ใหม่
 - ✅ **spec-sync ครบ 5 จุด (MAR-77, 2026-07-03):** logout · search=ILIKE · shops/{slug} · cart error → แก้ SPEC in-place (#95) · simulate-inbound gate SELLER+owner = โค้ด (social#8) + shops/{slug} cleanup (catalog#16); verify สดผ่าน Kong
 - **ถัดไป (เลือก):** P4b (Hermes admin tools) **หรือ** P5 (จ่ายเงินจริง/รีวิว/wishlist) **หรือ** เฟส Ops (deploy จริง + CI/CD + monitoring)
