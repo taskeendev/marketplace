@@ -398,6 +398,50 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 
 **Non-goals (P4b):** admin จัด flash-sale event ทั้งแพลตฟอร์ม (seller-driven เท่านั้น) · % discount (ราคาตายตัว) · JWT revocation ตอน ban (ปล่อยหมดอายุ) · flash-sale ซ้อน/หลายช่วงต่อสินค้า (1 ต่อสินค้า) · audit log admin actions · appeal/notification ตอนโดน ban · schedule แบบ recurring
 
+### SPEC — P5: จ่ายเงิน (mock) + รีวิว/ดาว + wishlist
+**เคาะแล้ว (brainstorm 2026-07-05):** payment + reviews + wishlist (เลื่อน recommendations) · **จ่ายเงิน mock behind interface** (ปรัชญาเดียวกับ mock Meta/LLM — `PaymentProvider` + `MockPaymentProvider`, จำลอง PromptPay QR/บัตร + confirm, ไม่ต้อง creds จริง, เสียบ Omise/Stripe ทีหลัง) · **payment-service ใหม่** · reviews→catalog · wishlist→order
+
+**สถาปัตยกรรม:** service ใหม่ `marketplace-payment` (:8087, Boot 3.4 + Postgres `paymentdb` + common; template = `marketplace-agent`). reuse internal-key + RestClient.
+
+**เปลี่ยน order lifecycle (หัวใจ P5):** checkout → order **`pending`** (เดิม instant `paid_mock`) → buyer จ่าย → **`paid`** → seller `shipped` → `done`. `paid_mock` เลิกใช้ (แทนด้วย pending+paid). seller ship ได้เฉพาะ order `paid`.
+
+**Flow จ่ายเงิน:**
+1. buyer checkout (order) → order `pending` (คืน orderId)
+2. `POST /api/payments {orderId, method}` → payment ดึง order ผ่าน internal (`GET {order}/internal/orders/{id}` → buyer/total/status), validate (buyer ตรง + status=pending + ยังไม่จ่าย) → สร้าง payment(status=pending) → `MockPaymentProvider.initiate` → PromptPay: `{qrData}` จำลอง / card: awaiting
+3. `POST /api/payments/{id}/confirm` (buyer กด "จ่ายแล้ว") → `MockPaymentProvider.confirm` (mock สำเร็จเสมอ; จริง = webhook) → payment `paid` → แจ้ง order `POST {order}/internal/orders/{orderId}/paid` (X-Internal-Key) → order `paid`
+
+**API**
+| Method Path | service | auth | ทำอะไร |
+|---|---|---|---|
+| `POST /api/payments` `{orderId, method:"promptpay"\|"card"}` | payment | BUYER | สร้าง payment สำหรับ order ของตัวเอง → `{paymentId, status:"pending", method, qrData?}` |
+| `POST /api/payments/{id}/confirm` | payment | BUYER (own) | mock จ่าย → payment `paid` + แจ้ง order → `{paymentId, status:"paid"}` |
+| `GET /api/payments/{id}` | payment | BUYER (own) | `{paymentId, orderId, amountBaht, method, status}` |
+| `GET /internal/orders/{id}` | order | X-Internal-Key | `{buyerUsername, totalBaht, status}` (payment ใช้ validate+amount) |
+| `POST /internal/orders/{id}/paid` | order | X-Internal-Key | order `pending`→`paid` (idempotent) |
+| `GET /internal/orders/purchased?buyer=&productId=` | order | X-Internal-Key | `{purchased:bool}` (มี order paid/shipped/done ที่มีสินค้านั้น) |
+| `POST /api/catalog/products/{id}/reviews` `{stars:1-5, body}` | catalog | BUYER (ซื้อแล้ว) | เช็ค purchased ผ่าน order → upsert review (1/คน/สินค้า) |
+| `GET /api/catalog/products/{id}/reviews` | catalog | public | `{avgStars, count, items:[{buyer, stars, body, createdAt}]}` |
+| `GET /api/orders/wishlist` | order | BUYER | `[productId]` |
+| `POST /api/orders/wishlist` `{productId}` | order | BUYER | เพิ่ม (idempotent) |
+| `DELETE /api/orders/wishlist/{productId}` | order | BUYER | ลบ |
+
+*(product detail (catalog) += `avgStars`, `reviewCount`)*
+
+**Data model:**
+- payment `payment(id, order_id UNIQUE, buyer_username, amount_baht, method, status[pending|paid|failed], provider_ref, created_at, paid_at)`
+- catalog `review(id, product_id, buyer_username, stars smallint CHECK 1..5, body text, created_at, UNIQUE(product_id, buyer_username))`
+- order `wishlist(id, buyer_username, product_id, created_at, UNIQUE(buyer_username, product_id))` · order.status enum +`pending`,`paid` (retire `paid_mock`)
+
+**แตกงาน (P5-T1..T6)** — feature-branch+PR ต่อ task, service tag + 1 KPI
+- **T1 [payment]** scaffold `marketplace-payment` (:8087, paymentdb) + `PaymentProvider`+`MockPaymentProvider` + `POST /api/payments` + `/{id}/confirm` + `GET /{id}` + OrderClient (internal get + notify paid) → test (MockWebServer stub order) · **KPI:** create payment → confirm → payment status=paid + order-notify ยิง
+- **T2 [order]** checkout → `pending` (แทน paid_mock) + `GET /internal/orders/{id}` + `POST /internal/orders/{id}/paid` + ship guard (advance ได้เฉพาะ `paid`) → test · **KPI:** checkout → pending; internal/paid → paid; seller ship บน pending → 400/409
+- **T3 [order]** wishlist `wishlist` + GET/POST/DELETE `/api/orders/wishlist` → test · **KPI:** add → GET มี; delete → หาย; ซ้ำ → idempotent
+- **T4 [catalog]** `review` + POST/GET `/api/catalog/products/{id}/reviews` (purchased-check via order internal) + avgStars/reviewCount ใน detail → test · **KPI:** ยังไม่ซื้อ → review 403; ซื้อแล้ว → review 201 + avgStars อัปเดต
+- **T5 [web]** payment page (`/pay/{orderId}` QR/บัตร + "จ่ายแล้ว" → order paid) + review UI (ดาว+ฟอร์ม บน product ถ้าซื้อแล้ว) + wishlist ❤️ + หน้า `/wishlist` + i18n · verify `npm run build` + ผ่าน Kong
+- **T6 [gateway/deploy]** Kong route `/api/payments` + payment-service+postgres-payment ใน compose/k8s + **smoke steps** (checkout→pending→pay→paid→seller ship · review หลังซื้อ · wishlist add/remove)
+
+**Non-goals (P5):** gateway จ่ายเงินจริง (mock behind interface; Omise/Stripe เสียบทีหลัง) · async webhook จริง (confirm = buyer กด) · refund/void · แนะนำสินค้า (recommendations เลื่อน) · review รูปภาพ/reply · แก้/ลบ review (upsert เท่านั้น) · partial payment/หลาย method ต่อ order · wishlist batch-get (คืน productIds, web fetch เอง)
+
 ---
 
 ## เฟส Ops — deploy จริง (local k8s) + CI/CD + observability + infra debt (เคาะ 2026-07-04)
@@ -424,7 +468,7 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 
 **Non-goals (Ops):** cloud จริง (AWS/GCP/DO) · service mesh (Istio/Linkerd) · mTLS (HMAC ก่อน) · log aggregation (Loki/ELK) · secrets manager (Vault/SOPS) · GitOps (ArgoCD — kustomize+kubectl ก่อน) · multi-cluster/multi-region
 
-**Phase 5 — ทีหลัง** · จ่ายเงินจริง (PromptPay/บัตร) · รีวิว/ดาว · wishlist · ระบบแนะนำสินค้า
+**Phase 5** · จ่ายเงิน (mock behind interface) · รีวิว/ดาว · wishlist *(สเปคเต็มด้านล่าง; recommendations เลื่อน)*
 
 ---
 
