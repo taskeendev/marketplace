@@ -263,6 +263,11 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 **SD7 — display_name:** `WebhookService.relay`: `displayName` null/blank → `fbGraph.fetchProfileName(conn.pageToken, externalId)` → ใช้ชื่อ · error/empty → fallback `"FB "+last4` (try/catch, ไม่ crash) · simulate path (displayName != null) → ใช้ค่าเดิม Graph ไม่ถูกเรียก
 - **KPI (integration test social):** mock คืน "สมชาย ใจดี" → `display_name`="สมชาย ใจดี" · 3 inbound → ไม่มีห้องขึ้นต้น "FB " · mock throw → fallback "FB <id>" + ไม่ 500
 
+**Real Graph hookup (BLOCKED — รอ Meta verify, card แยกใน JIRA):** seam พร้อมแล้ว (`FbGraph` + `MockFbGraph` + signature verify จริง + tests). งานที่เหลือ:
+- **โค้ด (dev):** `RealFbGraph implements FbGraph` (`@ConditionalOnProperty(name="fb.graph-url")`, ใช้ `RestClient` แบบ `auth.GraphClient`): `exchangePageToken` = `/oauth/access_token`→`/me/accounts` (page token long-lived) · `fetchProfileName` = `GET /{psid}?fields=name` · `MockFbGraph` +`@ConditionalOnMissingBean(FbGraph.class)` (default เมื่อไม่มี real) · `.env`: `fb.graph-url/app-id/app-secret/redirect-uri`
+- **Meta (มนุษย์เท่านั้น = blocker):** สมัคร Meta app + Business Verification + App Review (`pages_messaging`, `pages_read_engagement`) → ได้ credential จริง
+- **acceptance:** ใส่ real creds → connect page จริง → page_token เป็น long-lived จริง (ไม่ใช่ `pat-`) · inbound จาก FB user จริง → display_name = ชื่อ profile จริง · `fb.graph-url` ว่าง → mock ยัง default (28 tests เดิมเขียว)
+
 ### SPEC — P3b: Product sync (catalog → FB Shops, mock)
 **เคาะแล้ว (brainstorm 2026-07-01):** seller กดปุ่ม **"sync ทั้งหมดไป FB"** (manual) · **social** เป็นเจ้าของ FB catalog sync · mock Meta · scope = push สินค้า **ACTIVE ทั้งหมด**, กดซ้ำ = upsert, ไม่จัดการลบ (Lean) · reuse route `/api/social` + service social เดิม (P3a) → ไม่ต้องแตะ gateway/compose
 
