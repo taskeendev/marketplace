@@ -185,7 +185,18 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 | client→ | `{type:"auth", token}` (frame แรกบังคับ) | ✓ → `{type:"authed"}` ; ✗ → close **4401** |
 | client→ | `{type:"send", conversationId, body}` | เช็คเป็นคู่สนทนา → persist → push ไป buyer+shop; ไม่ใช่คู่ → close **4403** |
 | →client | `{type:"message", message:{id, conversationId, senderUsername, body, createdAt}}` | ส่งถึงทั้งสองฝั่ง (echo ผู้ส่งด้วย) |
+| client→ | `{type:"ping"}` (heartbeat, D6) | authed แล้วเท่านั้น → ตอบ `{type:"pong"}`; ก่อน authed = ปิด 4401 ตามเดิม |
+| →client | `{type:"pong"}` (D6) | ตอบ heartbeat; ไม่ persist ไม่ side-effect |
 | →client | `{type:"error", detail}` | error อื่นๆ |
+
+**D6 keep-alive — client `chatSocket.ts` (MAR-59):** WS หลุด (เน็ตวูบ / Kong idle-timeout / token หมด) ต้องต่อกลับเองไม่ต้อง refresh หน้า
+- **reconnect:** close ที่ไม่ได้ตั้งใจ → ต่อใหม่ · backoff 1→2→4→8s (cap 10s) · reset counter+backoff เมื่อได้ `authed`
+- **re-auth:** close code **4401** (token verify ไม่ผ่าน) → `refresh()` (rotate refresh-cookie → access token ใหม่) ก่อนต่อใหม่
+- **heartbeat:** หลัง `authed` ส่ง `{type:"ping"}` ทุก **25s**; ไม่ได้ `pong` ใน **10s** → force close → เข้า reconnect (จับ silent-death ที่ `onclose` ไม่ยิง; อิง Kong idle ~60s)
+- **give up → สถานะ "หลุดการเชื่อมต่อ":** (ก) `refresh()` ล้มเหลว (refresh cookie หมด) **หรือ** (ข) reconnect ครบ **10 ครั้ง** ยังไม่ `authed` → หยุด reconnect + เคลียร์ timer + แจ้ง caller ผ่าน `onDisconnected` → `Chat.tsx` แสดงแบนเนอร์ "หลุดการเชื่อมต่อ" (ไม่เด้ง login)
+- **deliberate close:** `close()` (ออกจากหน้า) → ไม่ reconnect + เคลียร์ timer ทั้งหมด
+- **side-effects:** ping/pong ไม่ persist/notify/audit · reconnect = re-register session ใน SessionRegistry (session เก่าถูกถอดโดย `afterConnectionClosed`) → ไม่มี duplicate delivery · msg ที่พลาดช่วงหลุด = out-of-scope (msg ใหม่มาเองหลัง re-register)
+- **KPI:** D6-a → `ws_check.py` ยิง `ping` ได้ `pong` ผ่าน Kong · D6-b → `npm test` (Vitest + fake WebSocket) assert reconnect / refresh-on-4401 / ping-sent / no-pong→reconnect / give-up-after-10
 
 **เชื่อม catalog (chat→catalog, internal docker net):** สร้างห้อง → `GET /api/catalog/products/{id}` (shopId, shopName) · seller resolve ร้าน → `GET /api/catalog/shops/me` (forward identity)
 **gateway (เพิ่ม):** Kong route `/api/chat`→chat-service · `/ws/chat`→chat-service (WS upgrade; global jwt-hs512 plugin ปล่อยผ่านเมื่อไม่มี token header บน handshake)
