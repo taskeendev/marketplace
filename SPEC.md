@@ -283,7 +283,7 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 
 **Phase 4 — Hermes AI agent + admin** = แตกเป็น P4a (agent) + P4b (admin). ทำ **P4a ก่อน**:
 - **P4a — Hermes agent**: ตอบลูกค้าอัตโนมัติในแชต (mock LLM) *(สเปคเต็มด้านล่าง)*
-- **P4b — admin**: นาทีทอง (flash-sale ตั้งเวลา) · ban (user/ร้าน/สินค้า) · จัดการ caption *(skeleton)*
+- **P4b — admin + seller tools**: นาทีทอง (flash-sale ตั้งเวลา) · ban (user/ร้าน/สินค้า) · จัดการ caption *(สเปคเต็มด้านล่าง)*
 
 ### SPEC — P4a: Hermes AI agent (auto-reply, mock LLM)
 **เคาะแล้ว (brainstorm 2026-07-01):** ทำ P4a ก่อน · **mock LLM** หลัง interface `LlmAgent` (`MockLlmAgent` = จับ intent → เรียก tool → ตอบ templated อิงข้อมูลจริง; เสียบ Claude จริงทีหลัง — ปรัชญาเดียวกับ mock Meta) · **auto-reply + toggle เปิด/ปิดต่อร้าน** + guardrail · **tools = สินค้า/สต็อก/ราคา (catalog) + สถานะออเดอร์ (order)**
@@ -359,6 +359,44 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 - **T5 [FE]** web: seller Hermes toggle + ป้าย 🤖 บนข้อความบอท + i18n
 
 **Non-goals (P4a):** เรียก LLM/Claude จริง (interface พร้อม, mock ก่อน) · streaming · memory ข้าม turn · admin tools (P4b) · rate-limit คำตอบบอท · multi-step tool planning
+
+### SPEC — P4b: admin + seller tools (flash-sale · ban/moderation · caption)
+**เคาะแล้ว (brainstorm 2026-07-05):** ครบ 3 feature · **ADMIN role + SELLER ผสม** (ADMIN=moderation ทั้งแพลตฟอร์ม; SELLER=flash-sale+caption ของร้านตัวเอง) · **ต่อยอด service เดิม ไม่มี service ใหม่** · flash-sale=ราคาตายตัว · banned user JWT เดิมปล่อยหมดอายุเอง (ไม่มี revocation list — stateless, ยอมรับใน lab)
+
+**Role:** เพิ่ม `ADMIN` ใน role · **seed admin user** (username `admin`, password จาก env `ADMIN_SEED_PASSWORD`, role=ADMIN) ผ่าน Flyway · auth ออก JWT `role=ADMIN` · Kong route `/api/admin/**` (ต้องมี token; service เช็ค `hasRole('ADMIN')`)
+
+**Data model (เพิ่ม, Flyway ต่อ service):**
+- auth `app_user`: +`banned boolean not null default false`
+- catalog `shop`: +`banned boolean not null default false` · `product`: +`banned boolean not null default false` *(แยกจาก `active` ที่ seller คุมเอง — `banned`=admin คุม)* · ตาราง `flash_sale(id, product_id bigint UNIQUE FK, sale_price_baht int not null, starts_at timestamptz not null, ends_at timestamptz not null, created_at)`
+- social `product_caption(id, shop_id bigint, product_id bigint UNIQUE, caption_th text, caption_en text, updated_at)`
+
+**Effective price (flash-sale):** catalog คำนวณ server-side — `now ∈ [starts_at, ends_at)` → `sale_price_baht` ไม่งั้น `price_baht`. ทุกที่ที่คืนราคา (browse/detail/lookup) คืน **effective price ในฟิลด์ `priceBaht` เดิม** + บล็อก `flashSale:{salePriceBaht, endsAt}` เมื่อ active (null เมื่อไม่ active) → **checkout (order→catalog `/products/{id}`) ใช้ราคาลดอัตโนมัติโดยไม่ต้องแก้ order** · badge/countdown ใช้ `flashSale`
+
+**Ban enforcement:** banned product **หรือ** product ของ banned shop → หายจาก browse (`/api/catalog/products`) + lookup `/products/{id}` →404 → checkout →400 "product unavailable" (reuse ของเดิม) · banned user → auth login →403 `account_banned`
+
+**API**
+| Method Path | service | auth | ทำอะไร |
+|---|---|---|---|
+| `POST /api/admin/users/{username}/ban` · `/unban` | auth | ADMIN | set/clear `banned` |
+| `GET /api/admin/users?banned=true` | auth | ADMIN | list banned users |
+| `POST /api/admin/shops/{id}/ban` · `/unban` | catalog | ADMIN | set/clear shop `banned` |
+| `POST /api/admin/products/{id}/ban` · `/unban` | catalog | ADMIN | set/clear product `banned` |
+| `POST /api/catalog/shops/me/products/{id}/flash-sale` `{salePriceBaht,startsAt,endsAt}` | catalog | SELLER (own) | upsert flash-sale (validate: salePrice<price, starts<ends, ends>now) |
+| `DELETE /api/catalog/shops/me/products/{id}/flash-sale` | catalog | SELLER (own) | ยกเลิก |
+| `GET /api/social/products/{id}/caption` | social | SELLER (own) | `{captionTh,captionEn}` (null ถ้ายังไม่ตั้ง) |
+| `PUT /api/social/products/{id}/caption` `{captionTh,captionEn}` | social | SELLER (own) | upsert caption |
+
+*(browse/detail คืน `priceBaht`=effective + `flashSale` — ไม่มี endpoint ใหม่)* · caption: social sync (P3) ใช้ `caption_th` ถ้ามี ไม่งั้น title เดิม
+
+**แตกงาน (P4b-T1..T6)** — feature-branch+PR ต่อ task, service tag + 1 KPI ต่อตัว
+- **T1 [auth]** ADMIN role + seed admin (Flyway) + `app_user.banned` + `/api/admin/users/{u}/ban|unban` + `GET /api/admin/users?banned` + login เช็ค banned→403 → test · **KPI:** ban user → login 403; unban → login 200
+- **T2 [catalog]** `shop.banned`+`product.banned` + `/api/admin/shops|products/{id}/ban|unban` (ADMIN) + enforcement (browse exclude banned + banned-shop products; lookup→404) → test · **KPI:** ban product → หายจาก `/products` list + `/products/{id}`→404 + checkout→400
+- **T3 [catalog]** `flash_sale` + seller upsert/delete `/shops/me/products/{id}/flash-sale` (validate) + effective price ใน browse/detail/lookup + `flashSale` block → test · **KPI:** ตั้ง flash-sale active → `/products/{id}`.priceBaht=salePrice + checkout ใช้ราคาลด; หมดเวลา → ราคาปกติ
+- **T4 [social]** `product_caption` + seller GET/PUT `/api/social/products/{id}/caption` + sync ใช้ caption override title → test · **KPI:** ตั้ง caption → sync ส่ง caption_th (ไม่ใช่ title) ไป FB stub
+- **T5 [web]** admin ban console (route `/admin`, ADMIN-only) + seller flash-sale form + caption editor (หน้า product ของ seller) + buyer flash-sale badge+ราคาลด+นับถอยหลัง · i18n · verify `npm run build` + ผ่าน Kong
+- **T6 [gateway/deploy]** Kong route `/api/admin/**` + seed admin env + **smoke steps** (flash-sale ราคาลดตอน checkout · admin ban product→browse หาย/checkout 400 · admin auth: ไม่มี ADMIN → 403)
+
+**Non-goals (P4b):** admin จัด flash-sale event ทั้งแพลตฟอร์ม (seller-driven เท่านั้น) · % discount (ราคาตายตัว) · JWT revocation ตอน ban (ปล่อยหมดอายุ) · flash-sale ซ้อน/หลายช่วงต่อสินค้า (1 ต่อสินค้า) · audit log admin actions · appeal/notification ตอนโดน ban · schedule แบบ recurring
 
 ---
 
