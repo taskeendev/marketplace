@@ -268,6 +268,17 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 - **Meta (มนุษย์เท่านั้น = blocker):** สมัคร Meta app + Business Verification + App Review (`pages_messaging`, `pages_read_engagement`) → ได้ credential จริง
 - **acceptance:** ใส่ real creds → connect page จริง → page_token เป็น long-lived จริง (ไม่ใช่ `pat-`) · inbound จาก FB user จริง → display_name = ชื่อ profile จริง · `fb.graph-url` ว่าง → mock ยัง default (28 tests เดิมเขียว)
 
+### SPEC — Web FB Login page-connect flow (real OAuth) [card แยก, ต่อจาก MAR-101]
+**เคาะแล้ว 2026-07-05:** seller **เลือก page ใน UI** (multi-page) · เก็บปุ่ม mock connect + simulate ไว้**คู่** real (config-gate) · ใช้จริงได้เมื่อมี RealFbGraph (MAR-101) + real Meta creds
+**ปม:** real OAuth `code` ใช้ครั้งเดียว + ตอนกด connect ยังไม่รู้ pageId → **exchange ครั้งเดียวใน callback** → เก็บ page tokens ชั่วคราว server-side → seller เลือก pageId → promote เป็น connection (**ไม่ส่ง token ออก browser**)
+- **seam:** `FbGraph` +`List<Page> pagesForCode(code)` (code→userToken→/me/accounts → `[{pageId,name,pageToken}]`) · `MockFbGraph` คืน 1 fake page · `exchangePageToken` เดิมคงไว้ (mock manual path SD6)
+- **data (social):** `pending_page_connection(id, username, page_id, name, page_token, created_at)` อายุสั้น ~10 นาที → เลือกแล้ว promote → `page_connection`
+- **endpoints (social, SELLER):** `GET /api/social/oauth/fb/connect-url` = FB dialog URL (scope `pages_show_list,pages_messaging,pages_read_engagement`) + state cookie (CSRF, mirror P3c) · `POST /api/social/oauth/fb/callback {code,state}` = validate state → `pagesForCode` → upsert pending → คืน `{pages:[{pageId,name}]}` (ไม่มี token) · `POST /api/social/connections {pageId}` (extend) = มี pending(username,pageId) → connect ด้วย pending token (promote); ไม่มี → mock path `{pageId,code}` เดิม
+- **web:** FbConnect +ปุ่ม "Connect Facebook" → connect-url → redirect FB → route `/oauth/fb/page-callback` (?code&state) → POST callback → แสดง list page → seller เลือก → POST `/connections {pageId}` → โชว์ที่เชื่อม · ปุ่ม mock+simulate เดิมคงไว้ · i18n th/en
+- **gateway:** Kong `/api/social` ครอบ subpath แล้ว (ไม่แตะ) · redirect-uri whitelist ใน Meta app · **config:** fb.app-id/redirect-uri (OAuth เวิร์กเฉพาะมี real Meta app → flow นี้ real-only, mock ใช้ปุ่มเดิม)
+- **แตกงาน:** T1 [BE] `pagesForCode` + pending table + 3 endpoints + state CSRF → integration test · T2 [FE] button+callback+pick UI+i18n → build
+- **KPI:** integration test social — connect-url มี scope+state · callback (test-double `pagesForCode`) valid → คืน pages + pending saved · state ผิด → 403 · POST `/connections {pageId}` หลัง callback → PageConnection มี pending token · (web e2e จริง = รอ real creds)
+
 ### SPEC — P3b: Product sync (catalog → FB Shops, mock)
 **เคาะแล้ว (brainstorm 2026-07-01):** seller กดปุ่ม **"sync ทั้งหมดไป FB"** (manual) · **social** เป็นเจ้าของ FB catalog sync · mock Meta · scope = push สินค้า **ACTIVE ทั้งหมด**, กดซ้ำ = upsert, ไม่จัดการลบ (Lean) · reuse route `/api/social` + service social เดิม (P3a) → ไม่ต้องแตะ gateway/compose
 
