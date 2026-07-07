@@ -457,7 +457,6 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 |---|---|---|---|
 | `POST /api/payments` `{orderId, method:"promptpay"\|"card"}` | payment | BUYER | สร้าง payment สำหรับ order ของตัวเอง → `{paymentId, status:"pending", method, qrData?}` |
 | `POST /api/payments/{id}/confirm` | payment | BUYER (own) | mock จ่าย → payment `paid` + แจ้ง order → `{paymentId, status:"paid"}` |
-| `GET /api/payments/{id}` | payment | BUYER (own) | `{paymentId, orderId, amountBaht, method, status}` |
 | `GET /internal/orders/{id}` | order | X-Internal-Key | `{buyerUsername, totalBaht, status}` (payment ใช้ validate+amount) |
 | `POST /internal/orders/{id}/paid` | order | X-Internal-Key | order `pending`→`paid` (idempotent) |
 | `GET /internal/orders/purchased?buyer=&productId=` | order | X-Internal-Key | `{purchased:bool}` (มี order paid/shipped/done ที่มีสินค้านั้น) |
