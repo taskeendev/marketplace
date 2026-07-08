@@ -513,6 +513,42 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 
 ---
 
+### SPEC — P5b: ขยาย P5 — cancel + refund + address + รูป upload (เคาะ 2026-07-08)
+**เคาะแล้ว:** ไม่มี service ใหม่ ไม่มี Kong route ใหม่ (ทุกอย่างใต้ `/api/orders` `/api/payments` `/api/catalog` เดิม) — internal endpoints ยิงตรง service-to-service ไม่ผ่าน Kong เหมือนเดิม · รูปเก็บ bytea ใน catalogdb (ไม่ตั้ง volume/S3 — stateless ไม่แตะ compose/k8s; ย้าย MinIO/S3 เมื่อรูปเยอะจริง) · paid ยกเลิกได้จนกว่าจะ shipped (ไม่มี return flow) · address = free text (recipient/phone/addressLine ไม่แยกตำบล/อำเภอ/จังหวัด) · checkout บังคับ `addressId` (smoke เดิมต้องเพิ่ม step สร้าง address ก่อน checkout)
+
+**เปลี่ยน order lifecycle (หัวใจ P5b):** `pending`→`paid`→`shipped`→`done` เดิม + buyer cancel ได้จาก `pending` (ยกเลิกเฉย ๆ) หรือ `paid` (refund ก่อน) → **`cancelled`** · `shipped`/`done` ห้าม (409) · cancel ทุกกรณีคืน stock (reuse catalog internal restore ของ reconcile job) · `NEXT_STATUS` ฝั่ง seller ไม่แตะ (cancel เป็นคนละ path)
+
+**API**
+| Method Path | service | auth | ทำอะไร |
+|---|---|---|---|
+| `POST /api/orders/{id}/cancel` | order | BUYER (own) | `pending`→cancelled+restock · `paid`→refund ผ่าน payment internal สำเร็จแล้ว→cancelled+restock → `{orderId, status:"cancelled", refunded:bool}` · `shipped/done`→409 |
+| `POST /internal/payments/refund` `{orderId}` | payment | X-Internal-Key | payment `paid`→`refunded` ผ่าน `PaymentProvider.refund` (mock สำเร็จเสมอ) → `{paymentId, status:"refunded"}` **idempotent** (refunded แล้วเรียกซ้ำ = no-op) · ไม่มี payment paid → 404 |
+| `GET /api/orders/addresses` | order | BUYER | `[{id, recipient, phone, addressLine}]` ของตัวเอง |
+| `POST /api/orders/addresses` `{recipient, phone, addressLine}` | order | BUYER | เพิ่ม |
+| `DELETE /api/orders/addresses/{id}` | order | BUYER (own) | ลบ (order เดิมไม่กระทบ เพราะ snapshot) |
+| checkout เดิม | order | BUYER | body += **`addressId` (required)** → validate เป็นของ buyer → snapshot ลง orders |
+| `POST /api/catalog/images` (multipart) | catalog | SELLER | ไฟล์ **≤2MB, jpeg/png/webp เท่านั้น** → เก็บ bytea → `{url:"/api/catalog/images/{id}"}` (เกิน→413, ผิดชนิด→415) — จากนั้น flow `imageUrls` เดิมไม่แตะ |
+| `GET /api/catalog/images/{id}` | catalog | public | serve bytes + content-type + `Cache-Control: immutable` |
+
+*(seller เห็นที่อยู่ใน order list/detail ตั้งแต่ `paid` ขึ้นไป — เอาไว้ส่งของ)*
+
+**Data model:**
+- payment `payment.status` += `refunded` + คอลัมน์ `refunded_at`
+- order `address(id, buyer_username, recipient, phone, address_line, created_at)` · orders += `recipient, phone, address_line` (nullable รองรับ row เก่า)
+- catalog `image(id, owner_username, content_type, bytes bytea, created_at)`
+
+**แตกงาน (P5b-T1..T6)** — feature-branch+PR ต่อ task, service tag + 1 KPI
+- [ ] **T1 [payment]** `PaymentProvider.refund` + `MockPaymentProvider` + `POST /internal/payments/refund` + status `refunded` · **KPI:** paid→refund→`refunded` + เรียกซ้ำ idempotent · ยังไม่ paid → error
+- [ ] **T2 [order]** `POST /api/orders/{id}/cancel` + PaymentClient(refund) + restock ผ่าน CatalogClient เดิม · **KPI:** pending cancel→cancelled+restore ยิง · paid cancel→refund ยิง+cancelled · shipped→409 · order คนอื่น→403
+- [ ] **T3 [order]** address CRUD + checkout require `addressId` + snapshot + seller view · **KPI:** checkout ไม่มี addressId→400 · มี→orders snapshot ครบ · addressId คนอื่น→403
+- [ ] **T4 [catalog]** upload/serve images · **KPI:** upload png → GET คืน bytes เดิม (md5 ตรง) · 3MB→413 · text/plain→415 · ไม่ login→401
+- [ ] **T5 [web]** ปุ่มยกเลิก (Orders, เฉพาะ pending/paid) · address book ใน Account + เลือกที่อยู่ตอน checkout (Cart) · Seller เห็นที่อยู่ · file picker ในฟอร์มสินค้า (upload→append imageUrls) · i18n · **KPI:** `npm run build` + Vitest เดิมผ่าน + ใช้จริงผ่าน Kong
+- [ ] **T6 [deploy]** smoke steps ใหม่: cancel pending→stock คืน · paid→cancel→refunded · checkout แนบ address→seller เห็น · upload รูป→โชว์ใน product · **KPI: smoke 22/22 PASS ผ่าน Kong สด**
+
+**Non-goals (P5b):** partial refund · seller เป็นคน cancel · return/refund หลัง `shipped` · refund gateway จริง (mock behind interface) · แก้ไข address (ลบ+เพิ่มแทน) · validate ที่อยู่ไทย (free text พอ) · resize/thumbnail/หลายขนาด · orphan image GC (จด debt) · ย้ายรูปเก่าที่เป็น external URL
+
+---
+
 ## การตรวจสอบรวม (per phase)
 1. `marketplace-deploy/run.sh --build -d` + `smoke.sh` (P0: register→login→me · P1: register→become-seller→เปิดร้าน→
    ลงสินค้า stock=N→ผู้ซื้อใส่ตะกร้า→checkout→stock=N-1→ผู้ขายเห็นออเดอร์)
