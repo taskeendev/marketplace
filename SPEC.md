@@ -549,6 +549,34 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 
 ---
 
+### SPEC — NOTIF: การแจ้งเตือนสถานะออเดอร์ in-app + realtime (เคาะ 2026-07-08)
+> spec ละเอียดระดับ implement/mock: **API-SPEC-NOTIF.md**
+
+**เคาะแล้ว:** ไม่มี service ใหม่ — notification อยู่ใน **chat-service** (เจ้าของ WS + Redis fan-out) · order ยิง event ผ่าน internal HTTP (**best-effort** — chat ล่ม order ไม่พัง) · ไม่มี Kong route ใหม่ (ใต้ `/api/chat`) · ไม่เก็บข้อความ — web render จาก `type` ผ่าน i18n (TH/EN ฟรี) · แจ้ง seller ผ่าน key `shop:<shopId>` (มีใน SessionRegistry แล้ว, order รู้ shopId อยู่แล้ว)
+
+**Flow:** order (จุด transition) → `POST {chat}/internal/notifications` → chat save ลง chatdb + publish Redis channel `notif.broadcast` → ทุก pod ส่ง WS frame `{type:"notification",...}` เข้า session ของ recipientKey → web กระดิ่ง badge เด้งสด
+
+**Events (4):** `order_paid`→`shop:<id>` (เงินเข้า เตรียมส่ง) · `order_cancelled`→`shop:<id>` (ทุกกรณี ไม่แยก branch) · `order_shipped`→`user:<buyer>` · `order_done`→`user:<buyer>`
+
+**API**
+| Method Path | service | auth | ทำอะไร |
+|---|---|---|---|
+| `POST /internal/notifications` `{recipientKey, type, orderId}` | chat | X-Internal-Key | save + push WS ผ่าน Redis ไปทุก pod |
+| `GET /api/chat/notifications` | chat | login | `{unread, items:[{id,type,orderId,createdAt,read}]}` ล่าสุด 50 — resolve key ผู้เรียก (`user:<me>` + `shop:<myShopId>` ถ้า SELLER) |
+| `POST /api/chat/notifications/read` | chat | login | mark ทั้งหมดเป็นอ่านแล้ว (per-item = yagni) |
+
+**Data:** chatdb V3 `notification(id, recipient_key, type, order_id, created_at, read_at)` index `recipient_key`
+
+**แตกงาน (NOTIF-T1..T4)** — feature-branch+PR ต่อ task, service tag + 1 KPI
+- [ ] **T1 [chat]** V3 + entity + internal POST + GET/read + NotificationBroadcaster (channel `notif.broadcast` คู่ `chat.broadcast`) + WS push · **KPI:** Testcontainers+Redis — post→row+deliver ถึง session · seller เห็นของ shop ตัวเอง · read→unread 0 · key ผิด→403
+- [ ] **T2 [order]** NotificationClient (best-effort, config `CHAT_URL` ใหม่) hook: markPaid→`order_paid` · cancel→`order_cancelled` · updateStatus→`order_shipped`/`order_done` · **KPI:** MockWebServer — ครบ 4 event · **chat ล่ม → order operation สำเร็จปกติ**
+- [ ] **T3 [web]** กระดิ่งใน nav + badge unread + dropdown (render จาก type ผ่าน i18n) + mark-read ตอนเปิด + รับ WS frame live · **KPI:** `npm run build` + Vitest เดิมผ่าน + ใช้จริงผ่าน Kong
+- [ ] **T4 [deploy]** env `CHAT_URL` ให้ order (compose+k8s) + smoke: paid→seller notif · shipped→buyer notif · read→unread 0 · **KPI: smoke 25/25 PASS ผ่าน Kong สด**
+
+**Non-goals (NOTIF):** email/LINE/FCM จริง · per-item read · preferences/mute · แจ้ง admin · chat unread count · pagination (50 ล่าสุดพอ) · retention/ลบเก่า
+
+---
+
 ## การตรวจสอบรวม (per phase)
 1. `marketplace-deploy/run.sh --build -d` + `smoke.sh` (P0: register→login→me · P1: register→become-seller→เปิดร้าน→
    ลงสินค้า stock=N→ผู้ซื้อใส่ตะกร้า→checkout→stock=N-1→ผู้ขายเห็นออเดอร์)
