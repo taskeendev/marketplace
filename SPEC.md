@@ -600,6 +600,25 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 
 ---
 
+### SPEC — LOKI: log aggregation เข้า Grafana (เคาะ 2026-07-09)
+> เฟส infra ล้วน — ไม่มี endpoint ใหม่ = **ไม่มี API-SPEC ไฟล์แยก** · แตะ repo เดียว: `marketplace-deploy/k8s/`
+
+**เคาะแล้ว:** ต่อยอด observability stack บน **k8s (kind)** (บ้านของ Prometheus/Grafana จากเฟส Ops) · **ไม่แตะโค้ดแอป** (เก็บ stdout เดิม ไม่ทำ structured logging) · **Agent = Grafana Alloy** (Promtail EOL มี.ค. 2026) ใช้ `loki.source.kubernetes` = tail ผ่าน k8s API **ไม่ต้อง hostPath** — RBAC namespaced Role แค่ `pods`+`pods/log` (least-privilege ตามแนว audit เดิม) · **Loki single binary + filesystem + emptyDir** (pattern เดียวกับ Prometheus; ceiling: S3/retention จริงตอน production) · Deployment 1 replica ทั้งคู่ (kind single node — multi-node ค่อย DaemonSet) · labels: `namespace/pod/container/app`
+
+**Flow:** pods stdout → Alloy (`discovery.kubernetes` role=pod ใน ns marketplace → relabel app/pod/container → `loki.source.kubernetes`) → `loki.write` → Loki :3100 → Grafana (datasource + dashboard "Marketplace logs")
+
+⚠️ **เงื่อนไขการทำงาน:** RAM 3.8GB รัน compose + kind คู่ไม่ได้ — ทำเฟสนี้ต้อง `docker compose stop` ↔ `docker start kind-control-plane` สลับกัน (จบเฟสสลับกลับ)
+
+**แตกงาน (LOKI-T1..T2)** — feature-branch+PR ต่อ task, service tag + 1 KPI
+- [ ] **T1 [deploy]** `k8s/loki.yaml` (ConfigMap+Deployment+Service :3100) + `k8s/alloy.yaml` (Role/RoleBinding+ConfigMap river+Deployment) + Grafana datasource += Loki + kustomization · **KPI:** query Loki API `{app=~".+-service"}` เจอ log จาก**ครบ 7 app services** บน kind สด
+- [ ] **T2 [deploy]** dashboard "Marketplace logs" (ตัวแปรเลือก service + แถว error-only) + `probe-logs.sh` gate script (รันซ้ำได้) + STATUS/วิธีใช้ · **KPI: `./probe-logs.sh` PASS** (≥7 services มี log + error query ทำงาน + datasource/dashboard provision สำเร็จ)
+
+**Gate ปิด epic:** pods Ready ทั้ง stack บน kind + `probe-logs.sh` PASS สด (ไม่รัน smoke 26 เต็ม — เฟสนี้ไม่แตะ app code)
+
+**Non-goals (LOKI):** retention/compactor จริง · S3/HA · log-based alerting · Tempo/trace correlation · structured JSON logging ฝั่งแอป · Loki ฝั่ง compose (docker logging driver) · LogQL recording rules
+
+---
+
 ## การตรวจสอบรวม (per phase)
 1. `marketplace-deploy/run.sh --build -d` + `smoke.sh` (P0: register→login→me · P1: register→become-seller→เปิดร้าน→
    ลงสินค้า stock=N→ผู้ซื้อใส่ตะกร้า→checkout→stock=N-1→ผู้ขายเห็นออเดอร์)
