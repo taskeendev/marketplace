@@ -577,6 +577,29 @@ transport = **Raw WebSocket** (`TextWebSocketHandler` + JSON) · เผื่อ
 
 ---
 
+### SPEC — RECO: "คนที่ซื้อสินค้านี้ยังซื้อ..." co-purchase recommendations (เคาะ 2026-07-09)
+> spec ละเอียดระดับ implement/mock: **API-SPEC-RECO.md**
+
+**เคาะแล้ว:** ไม่มี service/ตาราง/Kong route ใหม่ — ข้อมูลอยู่ใน order-service (`orders`+`order_item`) · **native query เดียว** ไม่มี ML/batch/cache (จด ceiling: ข้อมูลโตค่อยทำ materialized view) · คืน **productIds เรียงแล้ว ≤8** ให้ web fetch รายละเอียดจาก catalog เอง (pattern เดียวกับ wishlist — banned product ถูกกรองฟรีด้วย 404) · endpoint **public** (guest เห็นเหมือน e-commerce จริง)
+
+**นิยาม:** คนที่เคยซื้อ X (order `paid/paid_mock/shipped/done`) → สินค้าอื่นที่คนกลุ่มนั้นซื้อ (ตัด X) → เรียงตาม `COUNT(DISTINCT buyer)` (ไม่ใช่ qty — กัน 1 คนซื้อเยอะลากอันดับ), tie-break ด้วย product_id → top 8
+
+**API**
+| Method Path | service | auth | ทำอะไร |
+|---|---|---|---|
+| `GET /api/orders/products/{productId}/also-bought` | order | public | `{productIds:[...]}` เรียงแล้ว ≤8 · ไม่มีข้อมูล → `{productIds:[]}` (ไม่ 404) |
+
+**Web (หน้า Product):** section "คนที่ซื้อสินค้านี้ยังซื้อ" — fetch ids → fetch product รายตัว (404/แบน = ข้าม) · ว่าง → ซ่อนทั้ง section · i18n TH/EN
+
+**แตกงาน (RECO-T1..T3)** — feature-branch+PR ต่อ task, service tag + 1 KPI
+- [ ] **T1 [order]** native query ใน OrderItemRepository + endpoint + SecurityConfig permitAll path นี้ · **KPI:** อันดับถูกตาม DISTINCT buyer · ตัด X · `pending/cancelled` ไม่นับ · ว่าง → `[]` · ไม่ login → 200
+- [ ] **T2 [web]** section บนหน้า Product + skip 404 + ซ่อนเมื่อว่าง + i18n · **KPI:** `npm run build` + Vitest เดิมผ่าน + ใช้จริงผ่าน Kong
+- [ ] **T3 [deploy]** smoke step 26: 2 buyers ซื้อทับซ้อน → also-bought เรียงถูก · **KPI: smoke 26/26 PASS ผ่าน Kong สด** (ไม่มี env ใหม่)
+
+**Non-goals (RECO):** ML/embeddings · personalized per-user · reco หน้า Home · cache/materialized view · น้ำหนักตามเวลา/ราคา · cross-sell ตอน checkout
+
+---
+
 ## การตรวจสอบรวม (per phase)
 1. `marketplace-deploy/run.sh --build -d` + `smoke.sh` (P0: register→login→me · P1: register→become-seller→เปิดร้าน→
    ลงสินค้า stock=N→ผู้ซื้อใส่ตะกร้า→checkout→stock=N-1→ผู้ขายเห็นออเดอร์)
